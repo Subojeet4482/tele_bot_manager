@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from telegram_manager.bot.flows.common import (
+    buttons_step,
+    buttons_text,
     confirm_step,
     delay_text,
     delay_step,
@@ -25,6 +27,7 @@ KINDS = {
     "all": ("📨 Message all accounts", True, BULK_DELAY_MIN, DELAY_PRESETS),
     "alll": ("📤 Message all (opens chat)", True, OPEN_CHAT_MIN_DELAY, OPEN_CHAT_DELAY_PRESETS),
     "block": ("🚫 Block on all accounts", False, BULK_DELAY_MIN, DELAY_PRESETS),
+    "click": ("🖱 Click buttons on all accounts", False, BULK_DELAY_MIN, DELAY_PRESETS),
 }
 
 _NORMAL_INTRO = (
@@ -53,6 +56,8 @@ def _build(deps, kind: str) -> WizardSpec:
         lines = ["🔎 Confirm the user", f"👤 {answers['target']}"]
         if answers.get("text"):
             lines.append(f"✉️ {preview(answers['text'])}")
+        if answers.get("buttons"):
+            lines.append(f"🖱 Click: {buttons_text(answers['buttons'])}")
         if "delay" in answers:
             lines.append(f"⏱ {delay_text(answers['delay'])}")
         if answers.get("when"):
@@ -61,7 +66,7 @@ def _build(deps, kind: str) -> WizardSpec:
         return "\n".join(lines)
 
     ask = "Enter the user name to block (like @mandal4482)." if kind == "block" else \
-        "Enter the user name to message (like @mandal4482)."
+        "Enter the user name (or bot) to message (like @mandal4482)."
     steps = [
         target_step(ask),
         confirm_step("confirmed", describe),
@@ -69,6 +74,8 @@ def _build(deps, kind: str) -> WizardSpec:
     ]
     if needs_text:
         steps.append(text_step("✉️ Send the message text."))
+    if kind != "block":
+        steps.append(buttons_step(required=kind == "click"))
         steps.append(when_step())
 
     async def finish(wc: WizardContext) -> None:
@@ -82,6 +89,7 @@ def _build(deps, kind: str) -> WizardSpec:
             answers.get("text"),
             answers["delay"],
             start_in=answers.get("when", 0) * 60,
+            buttons=answers.get("buttons") or None,
         )
 
     return WizardSpec(name=f"bulk_{kind}", title=title, steps=steps, finish=finish, back_to="menu")
