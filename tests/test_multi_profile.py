@@ -192,6 +192,7 @@ class TimedMessageTests(unittest.IsolatedAsyncioTestCase):
         await h.tap(OWNER, "wz|bulk_all|pick|yes")
         await h.tap(OWNER, "wz|bulk_all|pick|0")
         await h.say(OWNER, "hello")
+        await h.tap(OWNER, "wz|bulk_all|pick|-")  # no buttons
         u = await h.say(OWNER, "10m")  # typed wait
         self.assertIn("Starts in 10m", texts(u))
         task = h.deps.bulk._tasks[OWNER]
