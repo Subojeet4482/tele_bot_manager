@@ -82,7 +82,7 @@ class AccountStore:
         rows = await self._all()
         if owner_id is None:
             return rows
-        return [row for row in rows if row["owner_id"] == owner_id]
+        return sorted((row for row in rows if row["owner_id"] == owner_id), key=lambda row: row.get("number") or 0)
 
     async def get(self, account_id: str, owner_id: int | None = None) -> dict | None:
         for row in await self._all():
