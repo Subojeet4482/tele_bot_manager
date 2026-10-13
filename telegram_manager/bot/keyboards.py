@@ -2,7 +2,7 @@
 
 home / menu            main screens
 connect, cx|otp|session  connecting an account
-acc_list, acc|<id>     accounts list and one account's screen
+acc_list, acc_refresh, acc|<id>   accounts list, refresh names, one account's screen
 logout, lo|<id>, loc|<id>   logout picker / confirm / do it
 fw|...                 forwarding switches
 bulk|<kind>, msg|start, msg_acc|<id>, pf|name|photo|bio|<id>   start a wizard from a button
@@ -19,6 +19,7 @@ BULK_TITLES = {
     "alll": "📤 Message all (opens chat)",
     "block": "🚫 Block on all accounts",
     "multi": "👥 Message chosen accounts",
+    "click": "🖱 Click buttons",
 }
 
 
@@ -44,12 +45,13 @@ def start_keyboard(is_owner: bool) -> Markup:
 def menu_keyboard(is_owner: bool) -> Markup:
     rows = [
         [Btn(BULK_TITLES["all"], callback_data="bulk|all"), Btn(BULK_TITLES["alll"], callback_data="bulk|alll")],
-        [Btn(BULK_TITLES["multi"], callback_data="bulk|multi")],
+        [Btn(BULK_TITLES["multi"], callback_data="bulk|multi"), Btn(BULK_TITLES["click"], callback_data="bulk|click")],
         [
             Btn(BULK_TITLES["block"], callback_data="bulk|block"),
             Btn("💬 Message from one account", callback_data="msg|start"),
         ],
         [Btn("📥 Forwarding", callback_data="fw|home"), Btn("🕒 Daily broadcast", callback_data="sched|home")],
+        [Btn("📋 My accounts", callback_data="acc_list"), Btn("🔄 Refresh names", callback_data="acc_refresh")],
     ]
     if is_owner:
         rows.append([Btn("📜 Live logs", callback_data="logs|link")])
@@ -86,7 +88,7 @@ def accounts_list(accounts: list[dict], online) -> Markup:
              f"{'🟢' if online(str(a['id'])) else '🔴'}", callback_data=f"acc|{a['id']}")]
         for a in accounts
     ]
-    rows.append([Btn("🔗 Connect account", callback_data="connect")])
+    rows.append([Btn("🔄 Refresh", callback_data="acc_refresh"), Btn("🔗 Connect account", callback_data="connect")])
     rows.append([Btn("⬅️ Back", callback_data="home")])
     return _markup(rows)
 
