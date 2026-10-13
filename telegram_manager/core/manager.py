@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from telegram_manager.core.accounts import AccountsMixin
+from telegram_manager.core.autoclick import AutoClickMixin
 from telegram_manager.core.base import ManagerBase
 from telegram_manager.core.dialogs import DialogsMixin
 from telegram_manager.core.forwarding import ForwardingMixin
@@ -25,6 +26,7 @@ class TelethonManager(
     AccountsMixin,
     DialogsMixin,
     MessagingMixin,
+    AutoClickMixin,
     ProfileMixin,
     ForwardingMixin,
     RepliesMixin,
