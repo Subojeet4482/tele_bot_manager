@@ -1,6 +1,8 @@
 """Connect, list and log out accounts."""
 from __future__ import annotations
 
+from datetime import datetime
+
 from telegram_manager.bot import keyboards, ui
 from telegram_manager.bot.handlers.base import HandlerBase
 from telegram_manager.errors import describe_error
@@ -38,8 +40,8 @@ class AccountHandlers(HandlerBase):
         await self.engine.start(update, context, f"pf_{what}", {"account": str(account["id"])})
 
     # --- list ------------------------------------------------------------------------------
-    async def list_screen(self, update, context) -> None:
-        accounts = await self.store.accounts.list(self.uid(update))
+    async def list_screen(self, update, context, footer: str = "") -> None:
+        accounts = await self.store.accounts.list(self.uid(update))  # always in number order
         if not accounts:
             await ui.show(update, "You have no connected accounts yet.", keyboards.no_accounts())
             return
@@ -50,7 +52,30 @@ class AccountHandlers(HandlerBase):
             phone = f" · {account['phone_masked']}" if account.get("phone_masked") else ""
             lines.append(f"{account.get('number')}. {label}{phone} {'🟢' if online else '🔴 offline'}")
         lines += ["", "Tap an account to change its forwarding or profile (name, photo, bio), message from it, or log it out."]
+        if footer:
+            lines += ["", footer]
         await ui.show(update, "\n".join(lines), keyboards.accounts_list(accounts, self.manager.is_online))
+
+    async def refresh(self, update, context) -> None:
+        """🔄 Refresh button and /refresh: read every account's name from Telegram again, then show the list."""
+        if not await self.entry(update):
+            return
+        if await self.accounts_or_notice(update) is None:
+            return
+        if update.callback_query is not None:
+            await ui.show(update, "🔄 Refreshing the account names…")
+        try:
+            changed, failed, offline = await self.manager.refresh_accounts(self.uid(update))
+        except Exception as exc:
+            await ui.show(update, f"❌ Could not refresh: {describe_error(exc)}", keyboards.back("acc_list"))
+            return
+        stamp = datetime.now(self.manager.tz).strftime("%H:%M:%S")
+        notes = [f"🔄 Refreshed at {stamp}: {changed} name(s) changed."]
+        if offline:
+            notes.append(f"🔴 {offline} account(s) offline, so their names were not read.")
+        if failed:
+            notes.append(f"⚠️ {failed} account(s) did not answer.")
+        await self.list_screen(update, context, "\n".join(notes))
 
     async def list_accounts(self, update, context) -> None:
         if await self.entry(update):
