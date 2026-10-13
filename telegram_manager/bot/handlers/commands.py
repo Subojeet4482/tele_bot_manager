@@ -14,7 +14,22 @@ _USAGE = {
     "all": "/all @user your message 3sec Y",
     "alll": "/alll @user your message 5sec Y",
     "block": "/allblock @user 3sec Y",
+    "click": "/click @user [follow] (join) 3sec Y",
 }
+
+
+def _prefill(answers: dict, args) -> None:
+    """Put what a one-liner already says into the wizard's answers, so those steps are skipped."""
+    if args.target:
+        answers["target"] = args.target
+    if args.text:
+        answers["text"] = args.text
+    elif args.buttons:
+        answers["text"] = ""  # buttons only: nothing to send, just press them
+    if args.text or args.buttons:
+        answers["buttons"] = list(args.buttons)
+    if args.delay is not None:
+        answers["delay"] = args.delay
 
 
 class CommandHandlers(HandlerBase):
@@ -50,12 +65,7 @@ class CommandHandlers(HandlerBase):
             await ui.show(update, "❌ Cancelled.", keyboards.back("menu", "⚙️ Menu"))
             return
         answers: dict = {}
-        if args.target:
-            answers["target"] = args.target
-        if args.text:
-            answers["text"] = args.text
-        if args.delay is not None:
-            answers["delay"] = args.delay
+        _prefill(answers, args)
         if args.confirmed:
             answers["confirmed"] = True
             answers["when"] = 0  # fully specified one-liner: no timer question
@@ -83,13 +93,13 @@ class CommandHandlers(HandlerBase):
             await ui.show(update, "❌ Cancelled.", keyboards.back("menu", "⚙️ Menu"))
             return
         answers: dict = {}
-        if args.target:
-            answers["target"] = args.target
-        if args.text:
-            answers["text"] = args.text
+        _prefill(answers, args)
+        if kind == "click":
+            answers.pop("text", None)  # /click has no message step
+            if args.buttons:
+                answers["when"] = 0  # a command that already names its buttons runs now
+        elif "text" in answers:
             answers["when"] = 0  # a command that already carries its message sends now
-        if args.delay is not None:
-            answers["delay"] = args.delay
         if args.confirmed:
             answers["confirmed"] = True
         await self.engine.start(update, context, f"bulk_{kind}", answers)
