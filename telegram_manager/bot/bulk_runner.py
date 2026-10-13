@@ -12,18 +12,27 @@ from telegram_manager.errors import describe_error
 
 logger = logging.getLogger(__name__)
 
-_VERBS = {"all": "Message sent", "alll": "Message sent", "multi": "Message sent", "one": "Message sent", "block": "Blocked"}
-_DOING = {"all": "📨 Sending", "alll": "📤 Sending", "multi": "👥 Sending", "one": "💬 Sending", "block": "🚫 Blocking"}
+_VERBS = {
+    "all": "Message sent", "alll": "Message sent", "multi": "Message sent", "one": "Message sent",
+    "block": "Blocked", "click": "Buttons clicked",
+}
+_DOING = {
+    "all": "📨 Sending", "alll": "📤 Sending", "multi": "👥 Sending", "one": "💬 Sending",
+    "block": "🚫 Blocking", "click": "🖱 Clicking",
+}
 PROGRESS_INTERVAL = 2.0  # seconds between edits of the progress message (Telegram limits edits)
 
 
-def summarize(kind: str, target: str, result: BulkResult) -> str:
+def summarize(kind: str, target: str, result: BulkResult, buttons: list[str] | None = None, text: str | None = None) -> str:
     if result.total == 0:
         return "You have no connected accounts."
     if result.ok == 0:
         head = f"❌ Nothing went through ({target})."
     else:
-        head = f"✅ {_VERBS[kind]}: {result.ok}/{result.total} accounts ({target})"
+        verb = "Buttons clicked" if buttons and not text else _VERBS[kind]
+        head = f"✅ {verb}: {result.ok}/{result.total} accounts ({target})"
+    if buttons:
+        head += f"\n🖱 Buttons: {' → '.join(buttons)}"
     if not result.errors:
         return head
     lines = "\n".join(f"• {line}" for line in result.errors[:15])
@@ -83,8 +92,10 @@ class BulkRunner:
         delay: int,
         account_ids: list[str] | None = None,
         start_in: int = 0,
+        buttons: list[str] | None = None,
     ) -> None:
-        """kind: all | alll | block | multi (picked accounts, opens chat) | one (one account, existing chat).
+        """kind: all | alll | block | click | multi (picked accounts, opens chat) | one (one account, existing chat).
+        buttons: inline buttons to press after the message (click: only that, no message).
         start_in: wait this many seconds before starting (a timed message)."""
         accounts = [a for a in await self._store.accounts.list(owner_id) if a.get("enabled", True)]
         if account_ids is not None:
@@ -114,7 +125,7 @@ class BulkRunner:
         # asyncio.create_task rather than application.create_task: PTB waits for its own tasks on
         # shutdown, and a bulk send with a long delay would block a redeploy.
         task = asyncio.create_task(
-            self._run(context.bot, owner_id, kind, target, text, delay, ids, start_in, message_id)
+            self._run(context.bot, owner_id, kind, target, text, delay, ids, start_in, message_id, buttons)
         )
         self._tasks[owner_id] = task
         task.add_done_callback(lambda done, owner=owner_id: self._forget(owner, done))
@@ -134,6 +145,7 @@ class BulkRunner:
         ids: list[str] | None,
         start_in: int,
         message_id: int | None,
+        buttons: list[str] | None = None,
     ) -> None:
         again = keyboards.after_action("🔁 Again", f"bulk|{kind}" if kind != "one" else "msg|start")
         last_edit = 0.0
@@ -159,13 +171,14 @@ class BulkRunner:
         try:
             if start_in:
                 await asyncio.sleep(start_in)
-            if kind == "all":
-                result = await self._manager.send_all(owner_id, target, text or "", delay, on_progress)
+            extra = {"buttons": buttons} if buttons else {}
+            if kind in ("all", "click"):
+                result = await self._manager.send_all(owner_id, target, text or "", delay, on_progress, **extra)
             elif kind == "alll":
-                result = await self._manager.send_all_any(owner_id, target, text or "", delay, on_progress)
+                result = await self._manager.send_all_any(owner_id, target, text or "", delay, on_progress, **extra)
             elif kind in ("multi", "one"):
                 result = await self._manager.send_selected(
-                    owner_id, ids or [], target, text or "", delay, kind == "multi", on_progress
+                    owner_id, ids or [], target, text or "", delay, kind == "multi", on_progress, **extra
                 )
             else:
                 result = await self._manager.block_all(owner_id, target, delay, on_progress)
@@ -176,7 +189,7 @@ class BulkRunner:
             logger.exception("Bulk action %s failed", kind)
             await self._finish(bot, owner_id, message_id, f"❌ It failed: {describe_error(exc)}", again)
             return
-        await self._finish(bot, owner_id, message_id, summarize(kind, target, result), again)
+        await self._finish(bot, owner_id, message_id, summarize(kind, target, result, buttons, text), again)
 
     @staticmethod
     async def _finish(bot, chat_id: int, message_id: int | None, text: str, markup) -> None:
