@@ -34,6 +34,8 @@ class BulkFlowTests(unittest.IsolatedAsyncioTestCase):
         u = await h.tap(OWNER, "wz|bulk_all|pick|3")
         self.assertIn("Send the message text", texts(u))
         u = await h.say(OWNER, "hello")
+        self.assertIn("Which inline buttons", texts(u))
+        u = await h.tap(OWNER, "wz|bulk_all|pick|-")  # Skip: no buttons
         self.assertIn("When should it be sent", texts(u))
         u = await h.tap(OWNER, "wz|bulk_all|pick|0")
         self.assertIn("Working on 2 account(s)", texts(u))
