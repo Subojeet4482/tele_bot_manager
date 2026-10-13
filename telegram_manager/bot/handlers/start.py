@@ -8,7 +8,10 @@ from telegram_manager.bot.handlers.base import HandlerBase
 class StartHandlers(HandlerBase):
     def _welcome(self, user_id: int) -> str:
         owner = self.deps.access.is_owner(user_id)
-        commands = "/menu /list /all /alll /multi /allblock /message /usermessage /botmessage /channelmessage /cancel"
+        commands = (
+            "/menu /list /refresh /all /alll /multi /click /allblock /broadcast /message "
+            "/usermessage /botmessage /channelmessage /cancel"
+        )
         if owner:
             commands += " /logs"
         return (
