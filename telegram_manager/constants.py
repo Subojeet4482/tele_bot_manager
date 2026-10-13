@@ -7,6 +7,12 @@ OPEN_CHAT_MIN_DELAY = 3  # /alll and the daily broadcast open new chats, so keep
 DELAY_PRESETS = (0, 1, 3, 5, 10, 30)
 OPEN_CHAT_DELAY_PRESETS = (3, 5, 10, 30, 60)
 
+# --- auto-click of inline buttons: /all @bot hello [follow] (join) --------------
+AUTOCLICK_MAX_BUTTONS = 5  # button names per command
+AUTOCLICK_WAIT = 25  # seconds to wait for a matching button to show up, per button name
+AUTOCLICK_POLL = 1.5  # seconds between looks at the chat while waiting
+AUTOCLICK_PAUSE = 1.5  # seconds after a click, so the bot can answer before the next look
+
 # --- timed messages ("send in N minutes") -------------------------------------
 WHEN_PRESETS = (0, 1, 5, 15, 30, 60)  # minutes; 0 = now
 WHEN_MAX_MINUTES = 24 * 60
