@@ -3,7 +3,11 @@ from __future__ import annotations
 
 from telegram_manager.bot import keyboards
 from telegram_manager.bot.flows.common import (
+    accounts_step,
+    buttons_step,
+    buttons_text,
     confirm_step,
+    describe_accounts,
     delay_step,
     preview,
     static,
@@ -59,21 +63,37 @@ def build_schedule_spec(deps) -> WizardSpec:
 
     async def describe_review(wc: WizardContext) -> str:
         a = wc.answers
+        every = await _covers_all(wc)
+        who = "all of your connected accounts (accounts you add later too)" if every else \
+            f"{len(a['accounts'])} chosen account(s): {await describe_accounts(deps, wc.user_id, a['accounts'])}"
+        buttons = f"🖱 Click: {buttons_text(a['buttons'])}\n" if a.get("buttons") else ""
         return (
             "📋 Review the daily broadcast\n\n"
             f"👤 To: {a['target']}\n"
             f"✉️ Message: {preview(a['text'], 120)}\n"
+            f"{buttons}"
+            f"👥 From: {who}\n"
             f"⏱ {a['delay']} sec between accounts\n"
             f"🕐 First run: {_clock(a['time'])} ({tz})\n"
-            f"🔁 Runs per day: {a['count']}\n\n"
-            "It runs from all of your connected accounts."
+            f"🔁 Runs per day: {a['count']}"
         )
+
+    async def _covers_all(wc: WizardContext) -> bool:
+        """True when every connected account is ticked: the job then follows the account list."""
+        everyone = {str(x["id"]) for x in await store.accounts.list(wc.user_id) if x.get("enabled", True)}
+        return everyone <= set(wc.answers["accounts"])
 
     async def finish(wc: WizardContext) -> None:
         a = wc.answers
-        job = DailyJob(a["target"], a["text"], a["delay"], a["time"], a["count"])
+        picked = None if await _covers_all(wc) else list(a["accounts"])
+        job = DailyJob(
+            a["target"], a["text"], a["delay"], a["time"], a["count"],
+            account_ids=picked, buttons=list(a.get("buttons") or []),
+        )
         await manager.start_daily_job(wc.user_id, job)
         accounts = [x for x in await store.accounts.list(wc.user_id) if x.get("enabled", True)]
+        if picked is not None:
+            accounts = [x for x in accounts if str(x["id"]) in picked]
         note = ""
         slot = 86400 / job.times_per_day
         if accounts and (len(accounts) - 1) * job.delay_seconds > slot:
@@ -87,6 +107,12 @@ def build_schedule_spec(deps) -> WizardSpec:
         target_step("Enter the user name to message every day (like @mandal4482)."),
         confirm_step("confirmed", describe_target),
         text_step("✉️ Send the message text."),
+        buttons_step(),
+        accounts_step(
+            deps,
+            "👥 Which accounts should send the broadcast?\n\n"
+            "Tap accounts to tick them, then Done — or Select all. You can also type numbers (1 3 5) or all.",
+        ),
         delay_step(OPEN_CHAT_MIN_DELAY, OPEN_CHAT_DELAY_PRESETS, _DELAY_INTRO),
         Step("time", time_prompt, parse_clock, time_choices, columns=2),
         Step(
