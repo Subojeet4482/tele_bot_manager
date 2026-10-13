@@ -18,20 +18,37 @@ logger = logging.getLogger(__name__)
 ProgressCallback = Callable[[BulkResult, str], Awaitable[None]]  # (result so far, account being worked on)
 
 
+def _with_buttons(buttons: list[str] | None) -> dict:
+    """Only pass `buttons` on when there are some, so plain sends keep their simple call."""
+    return {"buttons": buttons} if buttons else {}
+
+
 class MessagingMixin:
     # --- one account -----------------------------------------------------------------
+    async def _deliver(self, client, entity, text: str, buttons: list[str] | None) -> list[str]:
+        """Send the message (if any), then press the named buttons of the bot's reply."""
+        after_id = 0
+        if text:
+            sent = await client.send_message(entity, text, parse_mode=None)
+            after_id = int(getattr(sent, "id", 0) or 0)
+        if not buttons:
+            return []
+        return await self.click_buttons(client, entity, buttons, after_id)
+
     async def send_to_existing_dialog(
-        self, account_id: str, target: str, text: str, owner_id: int | None = None
+        self, account_id: str, target: str, text: str, owner_id: int | None = None, buttons: list[str] | None = None
     ) -> None:
         client = self._client_for(account_id, owner_id)
         entity = await self._existing_entity(account_id, client, target)
-        await client.send_message(entity, text, parse_mode=None)
+        await self._deliver(client, entity, text, buttons)
         logger.info("Sent message via account %s to %s (existing chat)", account_id, mask_id(target))
 
-    async def send_to_any(self, account_id: str, target: str, text: str, owner_id: int | None = None) -> None:
+    async def send_to_any(
+        self, account_id: str, target: str, text: str, owner_id: int | None = None, buttons: list[str] | None = None
+    ) -> None:
         client = self._client_for(account_id, owner_id)
         entity = await self._resolve_any_entity(client, target)
-        await client.send_message(entity, text, parse_mode=None)
+        await self._deliver(client, entity, text, buttons)
         logger.info("Sent message via account %s to %s (chat opened if needed)", account_id, mask_id(target))
 
     async def block_on_account(self, account_id: str, target: str, owner_id: int | None = None) -> None:
@@ -116,24 +133,37 @@ class MessagingMixin:
         return result
 
     async def send_all(
-        self, owner_id: int, target: str, text: str, delay_seconds: int, on_progress: ProgressCallback | None = None
+        self,
+        owner_id: int,
+        target: str,
+        text: str,
+        delay_seconds: int,
+        on_progress: ProgressCallback | None = None,
+        buttons: list[str] | None = None,
     ) -> BulkResult:
-        """/all: only chats that are already open in each account."""
+        """/all and /click: only chats that are already open in each account. `buttons` are pressed
+        after the message (an empty text means: only press them)."""
         return await self._for_each_account(
             owner_id,
-            lambda account_id: self.send_to_existing_dialog(account_id, target, text, owner_id),
+            lambda account_id: self.send_to_existing_dialog(account_id, target, text, owner_id, **_with_buttons(buttons)),
             delay_seconds,
             "/all",
             on_progress,
         )
 
     async def send_all_any(
-        self, owner_id: int, target: str, text: str, delay_seconds: int, on_progress: ProgressCallback | None = None
+        self,
+        owner_id: int,
+        target: str,
+        text: str,
+        delay_seconds: int,
+        on_progress: ProgressCallback | None = None,
+        buttons: list[str] | None = None,
     ) -> BulkResult:
         """/alll: opens the chat if needed. Accounts are always at least OPEN_CHAT_MIN_DELAY apart."""
         return await self._for_each_account(
             owner_id,
-            lambda account_id: self.send_to_any(account_id, target, text, owner_id),
+            lambda account_id: self.send_to_any(account_id, target, text, owner_id, **_with_buttons(buttons)),
             max(int(delay_seconds), OPEN_CHAT_MIN_DELAY),
             "/alll",
             on_progress,
@@ -159,14 +189,15 @@ class MessagingMixin:
         delay_seconds: int,
         open_chat: bool = True,
         on_progress: ProgressCallback | None = None,
+        buttons: list[str] | None = None,
     ) -> BulkResult:
-        """/multi (and a timed /message): only the accounts the admin picked.
+        """/multi, the multi daily broadcast (and a timed /message): only the accounts the admin picked.
         open_chat=True opens the chat if needed, so accounts stay at least OPEN_CHAT_MIN_DELAY apart."""
         send = self.send_to_any if open_chat else self.send_to_existing_dialog
         delay = max(int(delay_seconds), OPEN_CHAT_MIN_DELAY) if open_chat else int(delay_seconds)
         return await self._for_each_account(
             owner_id,
-            lambda account_id: send(account_id, target, text, owner_id),
+            lambda account_id: send(account_id, target, text, owner_id, **_with_buttons(buttons)),
             delay,
             "/multi" if open_chat else "/message",
             on_progress,
