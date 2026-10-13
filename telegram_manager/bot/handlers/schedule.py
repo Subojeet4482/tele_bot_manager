@@ -9,7 +9,10 @@ class ScheduleHandlers(HandlerBase):
     async def home_screen(self, update, context) -> None:
         uid = self.uid(update)
         job = self.manager.daily_job_for(uid)
-        text = "🕒 Daily broadcast\n\nSends one message to one user from all your accounts, every day.\n\n"
+        text = (
+            "🕒 Daily broadcast\n\nSends one message to one user every day, from all your accounts or only "
+            "the ones you pick. It can also press inline buttons of the bot's reply.\n\n"
+        )
         text += self.manager.daily_job_status(uid)
         await ui.show(update, text, keyboards.schedule_home(job is not None))
 
