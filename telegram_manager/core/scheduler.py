@@ -22,9 +22,13 @@ class SchedulerMixin:
         job = self.daily_job_for(owner_id)
         if job is None:
             return "No daily broadcast is scheduled."
+        accounts = "all accounts" if job.account_ids is None else f"{len(job.account_ids)} chosen account(s)"
+        buttons = f"Buttons to click: {' → '.join(job.buttons)}\n" if job.buttons else ""
         return (
             f"Target: {job.target}\n"
             f"Message: {job.text}\n"
+            f"{buttons}"
+            f"Accounts: {accounts}\n"
             f"Delay between accounts: {job.delay_seconds}s\n"
             f"Starts daily at: {job.start_time.strftime('%I:%M %p').lstrip('0')} ({self.tz.key})\n"
             f"Times per day: {job.times_per_day}"
@@ -84,6 +88,13 @@ class SchedulerMixin:
                 candidates.append(midnight + timedelta(seconds=base + slot * step))
         return min(c for c in candidates if c.timestamp() > now.timestamp())
 
+    async def _broadcast(self, owner_id: int, job: DailyJob):
+        """One round: from every account, or only from the ones picked for this broadcast."""
+        extra = {"buttons": job.buttons} if job.buttons else {}
+        if job.account_ids is None:
+            return await self.send_all_any(owner_id, job.target, job.text, job.delay_seconds, **extra)
+        return await self.send_selected(owner_id, job.account_ids, job.target, job.text, job.delay_seconds, True, **extra)
+
     async def _daily_job_loop(self, owner_id: int, job: DailyJob) -> None:
         while True:
             try:
@@ -92,7 +103,9 @@ class SchedulerMixin:
                 logger.info("Daily job: next broadcast at %s", next_run.isoformat(timespec="minutes"))
                 await asyncio.sleep(max(0.0, next_run.timestamp() - now.timestamp()))
                 logger.info("Daily job: broadcasting")
-                result = await self.send_all_any(owner_id, job.target, job.text, job.delay_seconds)
+                result = await self._broadcast(owner_id, job)
+                if result.total == 0:
+                    await self.notify(owner_id, "⚠️ Daily broadcast: none of its accounts is connected any more, nothing was sent.")
                 if result.errors:
                     await self.notify(owner_id, "⚠️ Daily broadcast finished with issues:\n" + "\n".join(result.errors))
                 interval = 86400 / job.times_per_day
