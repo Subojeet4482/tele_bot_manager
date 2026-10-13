@@ -39,6 +39,8 @@ class DailyJob:
     delay_seconds: int
     start_time: dtime
     times_per_day: int
+    account_ids: list[str] | None = None  # None = every connected account (also ones added later)
+    buttons: list[str] = field(default_factory=list)  # inline buttons to press after the message
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -47,6 +49,8 @@ class DailyJob:
             "delay_seconds": self.delay_seconds,
             "start_time": self.start_time.strftime("%H:%M"),
             "times_per_day": self.times_per_day,
+            "account_ids": None if self.account_ids is None else [str(item) for item in self.account_ids],
+            "buttons": list(self.buttons),
         }
 
     @classmethod
@@ -58,4 +62,6 @@ class DailyJob:
             delay_seconds=int(data["delay_seconds"]),
             start_time=dtime(int(hour), int(minute)),
             times_per_day=int(data["times_per_day"]),
+            account_ids=None if data.get("account_ids") is None else [str(item) for item in data["account_ids"]],
+            buttons=[str(item) for item in data.get("buttons") or []],
         )
