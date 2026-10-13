@@ -43,9 +43,13 @@ def patch_sleep(case, on_sleep) -> None:
 class FakeClient:
     def __init__(self):
         self.connected = True
+        self.me = None  # what get_me() returns (tests set it)
 
     def is_connected(self):
         return self.connected
+
+    async def get_me(self):
+        return self.me
 
 
 class Harness:
@@ -83,11 +87,11 @@ class Harness:
         """Replace the Telethon-touching methods with recorders."""
         manager = self.manager
 
-        async def send_existing(account_id, target, text, owner_id=None):
-            self.calls.append(("send_existing", account_id, target, text, owner_id))
+        async def send_existing(account_id, target, text, owner_id=None, buttons=None):
+            self.calls.append(("send_existing", account_id, target, text, owner_id) + ((buttons,) if buttons else ()))
 
-        async def send_any(account_id, target, text, owner_id=None):
-            self.calls.append(("send_any", account_id, target, text, owner_id))
+        async def send_any(account_id, target, text, owner_id=None, buttons=None):
+            self.calls.append(("send_any", account_id, target, text, owner_id) + ((buttons,) if buttons else ()))
 
         async def block(account_id, target, owner_id=None):
             self.calls.append(("block", account_id, target, owner_id))
@@ -110,9 +114,9 @@ class Harness:
         handlers = {
             "start": p.start.start, "menu": p.start.menu, "cancel": p.start.cancel, "list": p.accounts.list_accounts,
             "message": p.commands.message_command, "multi": p.commands.multi_command, "logs": p.logs.logs, "delay": p.start.moved,
-            "onalltime": p.start.moved,
+            "onalltime": p.start.moved, "refresh": p.accounts.refresh, "broadcast": p.schedule.home,
         }
-        for kind in ("all", "alll", "allblock"):
+        for kind in ("all", "alll", "allblock", "click"):
             handlers[kind] = self._bulk_handler("block" if kind == "allblock" else kind)
         for command, key in (("usermessage", "u"), ("botmessage", "b"), ("channelmessage", "c")):
             handlers[command] = self._switch_handler(key)
@@ -135,7 +139,7 @@ class Harness:
         head = data.split("|")[0]
         routes = {
             "home": p.start.home, "menu": p.start.menu, "connect": p.accounts.connect_menu, "cx": p.accounts.connect_start,
-            "acc_list": p.accounts.list_accounts, "logout": p.accounts.logout_menu, "lo": p.accounts.logout_select,
+            "acc_list": p.accounts.list_accounts, "acc_refresh": p.accounts.refresh, "logout": p.accounts.logout_menu, "lo": p.accounts.logout_select,
             "loc": p.accounts.logout_confirm, "acc": p.forwarding.account_screen, "bulk": p.commands.bulk_button,
             "msg_acc": p.commands.message_for_account, "stop_bulk": p.commands.stop_bulk, "logs": p.logs.logs,
             "wz": p.engine.on_callback, "pf": p.accounts.profile_button,
