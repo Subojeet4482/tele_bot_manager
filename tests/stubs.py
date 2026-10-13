@@ -77,10 +77,11 @@ def install() -> None:
     _module("telethon.tl")
     _module("telethon.tl.functions")
     _module("telethon.tl.functions.contacts", BlockRequest=_Any)
-    _module("telethon.tl.functions.messages", SendReactionRequest=_Any)
+    _module("telethon.tl.functions.messages", SendReactionRequest=_Any, ImportChatInviteRequest=_Any)
+    _module("telethon.tl.functions.channels", JoinChannelRequest=_Any)
     _module("telethon.tl.functions.account", UpdateProfileRequest=_Any)
     _module("telethon.tl.functions.photos", UploadProfilePhotoRequest=_Any)
-    _module("telethon.tl.types", ReactionEmoji=_Any)
+    _module("telethon.tl.types", ReactionEmoji=_Any, Channel=type("Channel", (), {}))
 
 
 install()
