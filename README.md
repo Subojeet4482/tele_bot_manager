@@ -6,7 +6,7 @@
 
 [**Open the bot → @telethon_manager_bot**](https://t.me/telethon_manager_bot)
 
-`Python 3.11+` · `Telethon` · `python-telegram-bot` · `Firebase Firestore` · `145 tests passing`
+`Python 3.11+` · `Telethon` · `python-telegram-bot` · `Firebase Firestore` · `169 tests passing`
 
 </div>
 
@@ -26,7 +26,9 @@
 - **`/multi`.** Message a user from only the accounts you tick.
 - **Timed messages.** Send now, or after a wait (minutes up to 24 hours), from one account or many.
 - **Account profile.** Change an account's name, bio and profile photo from the bot.
-- **Daily broadcast.** Schedule a message to go out from all accounts at set times.
+- **Daily broadcast.** Schedule a message to go out at set times from **all accounts or only the ones you tick** (multi broadcast).
+- **Auto-click buttons.** `/all @bot hello [follow] (join)` presses the bot's inline buttons by name, and joins the channel behind a link button.
+- **Refresh.** 🔄 Refresh on the accounts list re-reads every account's name from Telegram; accounts are always shown in number order.
 - **Multi-admin.** The owner adds admins; every admin sees and controls only their own accounts.
 - **Safe by design.** Sessions and API hashes are encrypted, secrets typed in chat are deleted, logs hold no message text.
 - **Self-healing.** Connection watchdog, auto-reconnect, and an instance lease so two copies never fight over one session.
@@ -72,6 +74,9 @@ Set `OWNER_ID` to your numeric Telegram ID (ask [@userinfobot](https://t.me/user
 | `/alll` | Same, but opens the chat if needed (at least 3 sec between accounts) |
 | `/allblock` | Block a user on all your accounts |
 | `/multi` | Message a user from the accounts **you choose** (tick them, then Done; opens the chat if needed) |
+| `/click` | Press a bot's inline buttons from all accounts, no message: `/click @bot [follow] (join)` |
+| `/refresh` | Re-read all account names from Telegram and show the list in number order |
+| `/broadcast` | Open the daily broadcast screen (all accounts or chosen accounts) |
 | `/message` | Send from one account (pick account → chat → text) |
 | `/usermessage` `/botmessage` `/channelmessage` | Forwarding switch for one account (opens a screen with buttons) |
 | `/list` | Your accounts |
@@ -137,6 +142,22 @@ Bot: Working on 5 account(s) …            →  "✅ Message sent: 5/5 accounts
 - `/alll` accepts 3–100 seconds only. `/allblock` has the same steps as `/all` but no message question.
 - Offline accounts are reported and skipped without waiting. **🛑 Stop** (or `/cancel`) stops a running job.
 
+### Auto-click inline buttons
+
+Accounts cannot "see" a bot's inline buttons, so name them at the end of the command:
+
+```
+/all @mandal4482 hello [follow] (join) 3sec Y     message, then press "follow", then "join"
+/all @mandal4482 [follow] (join)                   no message: only press the buttons of the bot's latest reply
+/click @mandal4482 [join]                          same, as its own command and menu button (🖱 Click buttons)
+```
+
+- `[name]` and `(name)` do the same thing; names are pressed **in the order written** (up to 5).
+- A name matches any button whose text **contains** it, ignoring case: `join` presses "Join", "✅ Joined" and "Join channel".
+- If the matching button is a **link to a channel** (or an invite link), the account **joins that channel**. Any other button is simply pressed.
+- Each name is waited for up to 25 seconds. An account whose button never shows up is listed under *Problems* with the missing name.
+- Works in `/all`, `/alll`, `/multi`, `/click` and the daily broadcast. Names must be the last things in the command (before `3sec` / `Y`); a message that ends in `(brackets)` would be read as a button name.
+
 ### Live progress
 
 While a bulk action runs, the bot keeps editing one message instead of staying silent:
@@ -161,6 +182,10 @@ When it ends, the same message turns into the result (with the reason for every 
 3. Pick when to send, check the summary, and confirm.
 
 `/multi @user hi 5sec Y` already has everything, so it only asks which accounts.
+
+### Daily broadcast: all or chosen accounts
+
+*Menu → Daily broadcast* (or `/broadcast`) asks: user → message → buttons to click (optional) → **which accounts** (tick them, or Select all) → delay → first time → runs per day. Ticking every account means "all accounts", so accounts you connect later are included automatically.
 
 ### Timed messages
 
@@ -220,7 +245,7 @@ A trailing `Y`/`N` and a trailing `3sec` are read as options, so a message that 
 | `telegram_accounts` | auto id | Encrypted session and API hash, phone, `phone_masked`, forwarding overrides, owner, number |
 | `telegram_admins` | admin's Telegram ID | Who added them, when, name |
 | `telegram_admin_settings` | admin's Telegram ID | Global forwarding switches and the account counter |
-| `telegram_daily_jobs` | admin's Telegram ID | Daily broadcast: `target`, `text`, `delay_seconds`, `start_time`, `times_per_day` |
+| `telegram_daily_jobs` | admin's Telegram ID | Daily broadcast: `target`, `text`, `delay_seconds`, `start_time`, `times_per_day`, `account_ids` (empty = all), `buttons` |
 | `telegram_reply_map` | `chatId_messageId` | Which forwarded message belongs to which original (for replies and reactions) |
 | `telegram_settings` | `instance_lease` | The lock that keeps one copy running |
 
@@ -263,7 +288,7 @@ Health uses a bot heartbeat (`get_me` every minute) and the connection watchdog.
 python -m unittest discover -s tests -v
 ```
 
-**145 tests, all passing.** They cover parsing, phone masking and lookup, config, the web server (health states, one-time login, cookies), Firestore isolation between admins, every wizard (bulk, message, connect with 2-step password and Back, daily broadcast, admin add/remove), access control, per-admin forwarding, user/bot/channel detection and bulk timing.
+**169 tests, all passing.** They cover parsing, phone masking and lookup, config, the web server (health states, one-time login, cookies), Firestore isolation between admins, every wizard (bulk, message, connect with 2-step password and Back, daily broadcast, admin add/remove), access control, per-admin forwarding, user/bot/channel detection and bulk timing.
 
 Without the Telegram/Telethon libraries installed, the tests use tiny stand-ins (`tests/stubs.py`); with them installed nothing is replaced.
 
