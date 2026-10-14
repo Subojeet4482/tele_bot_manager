@@ -19,6 +19,7 @@ WHEN_MAX_MINUTES = 24 * 60
 
 # --- daily broadcast ----------------------------------------------------------
 MAX_TIMES_PER_DAY = 1440
+MAX_DAILY_JOBS = 10  # daily broadcasts one owner/admin can have at the same time
 COUNT_PRESETS = (1, 2, 3, 4, 6, 12)
 TIME_PRESETS = ("09:00", "12:00", "18:00", "21:00")
 
@@ -53,3 +54,10 @@ TAKEOVER_WAIT = 25
 LOGIN_KEY_TTL = 600  # a /logs login link works once, for this many seconds
 SESSION_TTL = 12 * 3600  # browser session after using the link
 SELF_PING_MIN_INTERVAL = 30
+
+# --- start screen + public session export ------------------------------------------
+START_TEXT_MAX = 800  # welcome text; a photo caption may hold 1024, the rest is for the role line
+EXPORT_COOLDOWN = 30  # seconds between two login-code requests of one (non-admin) user
+EXPORT_AUTODELETE = 300  # the exported session message deletes itself after this many seconds
+USERNAME_MIN = 5  # Telegram's rule for public usernames
+USERNAME_MAX = 32
