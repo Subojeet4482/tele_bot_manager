@@ -115,6 +115,9 @@ class Harness:
             "start": p.start.start, "menu": p.start.menu, "cancel": p.start.cancel, "list": p.accounts.list_accounts,
             "message": p.commands.message_command, "multi": p.commands.multi_command, "logs": p.logs.logs, "delay": p.start.moved,
             "onalltime": p.start.moved, "refresh": p.accounts.refresh, "broadcast": p.schedule.home,
+            "give": p.control.give_start, "export": p.control.export_command, "startscreen": p.control.startcfg_command,
+            "help": p.control.help_command, "keyboard": p.start.keyboard, "hidekeyboard": p.start.hide_keyboard,
+            "emojiid": p.start.emoji_id,
         }
         for kind in ("all", "alll", "allblock", "click"):
             handlers[kind] = self._bulk_handler("block" if kind == "allblock" else kind)
@@ -143,11 +146,13 @@ class Harness:
             "loc": p.accounts.logout_confirm, "acc": p.forwarding.account_screen, "bulk": p.commands.bulk_button,
             "msg_acc": p.commands.message_for_account, "stop_bulk": p.commands.stop_bulk, "logs": p.logs.logs,
             "wz": p.engine.on_callback, "pf": p.accounts.profile_button,
+            "un": p.control.username_button, "exp": p.control.export_button, "help": p.start.help,
         }
         special = {
             "fw|home": p.forwarding.home, "fw|accs": p.forwarding.account_picker, "msg|start": p.commands.message_button,
             "sched|home": p.schedule.home, "sched|new": p.schedule.new, "sched|off": p.schedule.off,
             "adm|home": p.admins.home, "adm|add": p.admins.add, "adm|remove": p.admins.remove,
+            "give|start": p.control.give_start, "ex|start": p.control.public_export, "sc|preview": p.start.preview,
         }
         if data in special:
             handler = special[data]
@@ -155,6 +160,16 @@ class Harness:
             handler = p.forwarding.toggle_global
         elif data.startswith("fw|set|"):
             handler = p.forwarding.cycle
+        elif data.startswith("sched|view|"):
+            handler = p.schedule.view
+        elif data.startswith("sched|edit|"):
+            handler = p.schedule.edit
+        elif data.startswith("sched|del|"):
+            handler = p.schedule.delete
+        elif data.startswith("give|acc|"):
+            handler = p.control.give_account
+        elif data.startswith("sc|"):
+            handler = p.control.startcfg_button
         else:
             handler = routes[head]
         return await self._run(user_id, FakeUpdate(user_id, data=data), handler)
@@ -164,6 +179,13 @@ class Harness:
 
     async def send_photo(self, user_id: int, data: bytes) -> FakeUpdate:
         return await self._run(user_id, FakeUpdate(user_id, text=None).with_photo(data), self.parts.text.photo_input)
+
+    async def send_media(self, user_id: int, kind: str, file_id: str) -> FakeUpdate:
+        return await self._run(user_id, FakeUpdate(user_id, text=None).with_media(kind, file_id), self.parts.text.media_input)
+
+    async def press(self, user_id: int, label: str) -> FakeUpdate:
+        """Tap a button of the bottom menu (it arrives as a text message)."""
+        return await self._run(user_id, FakeUpdate(user_id, text=label), self.parts.menu.press)
 
     async def finish_bulk(self, user_id: int) -> None:
         task = self.deps.bulk._tasks.get(user_id)
