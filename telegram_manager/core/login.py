@@ -122,19 +122,42 @@ class ExportLoginMixin:
     """Session export for people who are not admins: log in once, hand back the session string,
     keep nothing. The login is NOT ended on Telegram's side, or the exported string would die."""
 
-    async def export_after_code(self, attempt: LoginAttempt, code: str) -> str:
+    async def export_after_code(self, attempt: LoginAttempt, code: str) -> tuple[str, dict[str, Any]]:
         """Raises SessionPasswordNeededError if the account has two-step verification."""
         await self._request(
             attempt.client.sign_in(phone=attempt.phone, code=code, phone_code_hash=attempt.phone_code_hash)
         )
         return await self._finish_export(attempt)
 
-    async def export_after_password(self, attempt: LoginAttempt, password: str) -> str:
+    async def export_after_password(self, attempt: LoginAttempt, password: str) -> tuple[str, dict[str, Any]]:
         await self._request(attempt.client.sign_in(password=password))
         return await self._finish_export(attempt)
 
-    async def _finish_export(self, attempt: LoginAttempt) -> str:
+    async def _finish_export(self, attempt: LoginAttempt) -> tuple[str, dict[str, Any]]:
+        """Returns (session_string, meta). meta only describes the account for the owner/admin
+        notification (see bot/flows/export.py); it is never stored."""
+        meta: dict[str, Any] = {"api_id": attempt.api_id, "api_hash": attempt.api_hash, "phone": attempt.phone}
+        try:
+            me = await self._request(attempt.client.get_me())
+        except Exception:
+            me = None
+        if me is not None:
+            meta["telegram_user_id"] = int(me.id)
+            meta["label"] = self.label_for_entity(me) or str(me.id)
         session = attempt.client.session.save()
         await self._safe_disconnect(attempt.client)  # disconnect only: no log_out, the session stays valid
         logger.info("A session was exported for someone's own account (nothing stored)")
-        return session
+        return session, meta
+
+    async def revoke_exported_session(self, session_string: str, api_id: int, api_hash: str) -> bool:
+        """End (log out) a session on Telegram's side. Used when the owner/admin taps 'Revoke' on
+        the notification about a session that was just exported. Returns True if Telegram confirmed it."""
+        client = self._new_client(session_string, api_id, api_hash)
+        try:
+            await self._connect_client(client)
+            return bool(await asyncio.wait_for(client.log_out(), 30))
+        except Exception:
+            logger.warning("Could not revoke an exported session", exc_info=True)
+            return False
+        finally:
+            await self._safe_disconnect(client)
