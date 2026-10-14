@@ -273,6 +273,159 @@ class AccountControlTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(self.acc["id"], picks[0])
 
 
+class MultiSessionExportTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.h = Harness()
+        self.acc1 = await self.h.add_account(OWNER, "One")
+        self.acc2 = await self.h.add_account(OWNER, "Two")
+
+        async def export_session(account_id, owner_id):
+            return f"SESSION-{account_id}"
+
+        self.h.manager.export_session = export_session
+
+    async def test_exports_several_accounts_into_one_txt_file(self):
+        h = self.h
+        u = await h.tap(OWNER, "exp|multi")
+        self.assertIn("Which accounts", texts(u))
+        await h.tap(OWNER, f"wz|exp_multi|tog|{self.acc1['id']}")
+        u = await h.tap(OWNER, f"wz|exp_multi|tog|{self.acc2['id']}")
+        done_btn = next(b for b in buttons(u.last()[1]) if b.callback_data == "wz|exp_multi|done")
+        self.assertIn("2 picked", done_btn.text)
+        await h.tap(OWNER, "wz|exp_multi|done")
+        self.assertEqual(len(h.bot.documents), 1)
+        chat_id, filename, content = h.bot.documents[0]
+        self.assertEqual(chat_id, OWNER)
+        self.assertTrue(filename.endswith(".txt"))
+        self.assertIn(f"SESSION-{self.acc1['id']}", content)
+        self.assertIn(f"SESSION-{self.acc2['id']}", content)
+        sent_captions = [text for chat, text in h.bot.sent if chat == OWNER and "2 session string(s)" in text]
+        self.assertEqual(len(sent_captions), 1)
+
+    async def test_failed_account_is_reported_but_does_not_block_the_rest(self):
+        h = self.h
+
+        async def export_session(account_id, owner_id):
+            if account_id == self.acc1["id"]:
+                raise RuntimeError("boom")
+            return f"SESSION-{account_id}"
+
+        h.manager.export_session = export_session
+        await h.tap(OWNER, "exp|multi")
+        await h.tap(OWNER, f"wz|exp_multi|tog|{self.acc1['id']}")
+        await h.tap(OWNER, f"wz|exp_multi|tog|{self.acc2['id']}")
+        await h.tap(OWNER, "wz|exp_multi|done")
+        self.assertEqual(len(h.bot.documents), 1)
+        _, _, content = h.bot.documents[0]
+        self.assertIn("FAILED", content)
+        self.assertIn(f"SESSION-{self.acc2['id']}", content)
+
+    async def test_bob_only_sees_his_own_accounts_to_export(self):
+        h = self.h
+        await h.access.add(BOB, OWNER, "Bob")
+        bob_acc = await h.add_account(BOB, "Bob 1")
+        u = await h.tap(BOB, "exp|multi")
+        picks = [b.callback_data for b in buttons(u.last()[1]) if b.callback_data.startswith("wz|exp_multi|tog|")]
+        self.assertEqual(picks, [f"wz|exp_multi|tog|{bob_acc['id']}"])
+
+
+class ExportNotifyAndRevokeTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        export_flow._last_request.clear()
+        export_flow._revoke_pending.clear()
+        self.h = Harness()
+        h = self.h
+
+        async def begin(owner_id, api_id, api_hash, phone):
+            return SimpleNamespace(client="c")
+
+        async def after_code(attempt, code):
+            return "EXPORTED-" + code, {"api_id": 12345, "api_hash": "a" * 32, "label": "Jane"}
+
+        async def abort(attempt):
+            pass
+
+        h.manager.begin_login, h.manager.export_after_code = begin, after_code
+        h.manager.abort_login = abort
+
+    async def _export_as_stranger(self):
+        h = self.h
+        await h.tap(STRANGER, "ex|start")
+        await h.say(STRANGER, "12345")
+        await h.say(STRANGER, "a" * 32)
+        await h.say(STRANGER, "+919876543210")
+        await h.say(STRANGER, "1 2 3 4 5")
+
+    async def test_owner_gets_notified_with_a_revoke_button(self):
+        h = self.h
+        await self._export_as_stranger()
+        owner_msgs = [(c, t) for c, t in h.bot.sent if c == OWNER and "session was exported" in t]
+        self.assertEqual(len(owner_msgs), 1)
+        self.assertIn("Jane", owner_msgs[0][1])
+
+    async def test_revoke_button_ends_the_session(self):
+        h = self.h
+        await self._export_as_stranger()
+        self.assertEqual(len(export_flow._revoke_pending), 1)
+        token = next(iter(export_flow._revoke_pending))
+
+        revoked = {}
+
+        async def revoke_exported_session(session, api_id, api_hash):
+            revoked["args"] = (session, api_id, api_hash)
+            return True
+
+        h.manager.revoke_exported_session = revoke_exported_session
+        u = await h.tap(OWNER, f"expr|{token}")
+        self.assertIn("revoked", texts(u))
+        self.assertEqual(revoked["args"], ("EXPORTED-12345", 12345, "a" * 32))
+        self.assertEqual(export_flow._revoke_pending, {})  # one-time use
+
+    async def test_revoke_button_twice_says_it_expired(self):
+        h = self.h
+        await self._export_as_stranger()
+        token = next(iter(export_flow._revoke_pending))
+        h.manager.revoke_exported_session = lambda *a: asyncio.sleep(0, result=True)
+        await h.tap(OWNER, f"expr|{token}")
+        u = await h.tap(OWNER, f"expr|{token}")
+        self.assertIn("expired", texts(u))
+
+    async def test_stranger_cannot_tap_revoke(self):
+        h = self.h
+        await self._export_as_stranger()
+        token = next(iter(export_flow._revoke_pending))
+        u = await h.tap(STRANGER, f"expr|{token}")
+        self.assertEqual(u.callback_query.answers[-1], ("🚫 This bot is only for its admin.", True))
+        self.assertEqual(len(export_flow._revoke_pending), 1)  # untouched
+
+
+class ConnectAutoDetectTests(unittest.IsolatedAsyncioTestCase):
+    async def test_rejects_obviously_wrong_text_as_a_session(self):
+        h = Harness()
+        await h.tap(OWNER, "connect")
+        u = await h.tap(OWNER, "cx|session")
+        self.assertIn("auto-detect", texts(u))
+        await h.say(OWNER, "12345")
+        await h.say(OWNER, "a" * 32)
+        u = await h.say(OWNER, "not a real session")
+        self.assertIn("doesn't look like a Telethon session", texts(u))
+
+    async def test_accepts_a_plausible_looking_session_string(self):
+        h = Harness()
+
+        async def connect_with_session(owner_id, api_id, api_hash, session):
+            return {"id": "acc1", "display_name": "Auto", "username": ""}
+
+        h.manager.connect_with_session = connect_with_session
+        await h.tap(OWNER, "connect")
+        await h.tap(OWNER, "cx|session")
+        await h.say(OWNER, "12345")
+        await h.say(OWNER, "a" * 32)
+        plausible = "QQ" + "A" * 300  # long enough, base64-safe
+        u = await h.say(OWNER, plausible)
+        self.assertIn("Connected", texts(u))
+
+
 class MessageButtonsTests(unittest.IsolatedAsyncioTestCase):
     def test_split_trailing_buttons(self):
         self.assertEqual(split_trailing_buttons("hello there [follow] (join)"), ("hello there", ["follow", "join"]))
@@ -314,13 +467,13 @@ class PublicExportTests(unittest.IsolatedAsyncioTestCase):
             if code == "999":
                 from telethon.errors import SessionPasswordNeededError
                 raise SessionPasswordNeededError()
-            return "EXPORTED-" + code
+            return "EXPORTED-" + code, {"api_id": 12345, "api_hash": "a" * 32, "label": "Stranger's account"}
 
         async def after_password(attempt, password):
             if password != "pw":
                 from telethon.errors import PasswordHashInvalidError
                 raise PasswordHashInvalidError()
-            return "EXPORTED-PW"
+            return "EXPORTED-PW", {"api_id": 12345, "api_hash": "a" * 32, "label": "Stranger's account"}
 
         async def abort(attempt):
             self.log.append(("abort",))
@@ -348,7 +501,9 @@ class PublicExportTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("did not save", texts(u))
         self.assertEqual(h.db.collection("telegram_accounts").docs, {})  # nothing stored
         self.assertEqual(await h.store.accounts.list(), [])
-        self.assertEqual(h.bot.sent[-1][0], STRANGER)
+        # the owner is told a session was exported, with a Revoke button
+        notice = [text for chat, text in h.bot.sent if chat == OWNER and "session was exported" in text]
+        self.assertEqual(len(notice), 1)
 
     async def test_two_step_password_path(self):
         h = self.h
