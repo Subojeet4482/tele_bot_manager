@@ -41,6 +41,8 @@ class MessageFlowTests(unittest.IsolatedAsyncioTestCase):
         u = await h.tap(OWNER, "wz|message|pick|1009")
         self.assertIn("Send the message text", texts(u))
         u = await h.say(OWNER, "hello there")
+        self.assertIn("Which inline buttons", texts(u))
+        u = await h.tap(OWNER, "wz|message|pick|-")
         self.assertIn("When should it be sent", texts(u))
         u = await h.tap(OWNER, "wz|message|pick|0")
         self.assertIn("Message sent", texts(u))
@@ -51,6 +53,7 @@ class MessageFlowTests(unittest.IsolatedAsyncioTestCase):
         await h.command(OWNER, "/message 1")
         await h.say(OWNER, "@mandal4482")
         u = await h.say(OWNER, "hi")
+        u = await h.say(OWNER, "-")  # no buttons to click
         u = await h.say(OWNER, "now")  # the "when" step accepts typed text too
         self.assertIn("Message sent", texts(u))
         self.assertEqual(h.calls[0][2], "@mandal4482")
@@ -277,7 +280,7 @@ class ScheduleFlowTests(unittest.IsolatedAsyncioTestCase):
         job = h.manager.daily_job_for(OWNER)
         self.assertEqual((job.target, job.text, job.delay_seconds, job.times_per_day), ("@mandal4482", "Good morning", 5, 2))
         self.assertIsNone(h.manager.daily_job_for(BOB))  # per admin
-        self.assertIn(str(OWNER), h.db.collection("telegram_daily_jobs").docs)
+        self.assertIn(f"{OWNER}_1", h.db.collection("telegram_daily_jobs").docs)
         u = await h.tap(OWNER, "sched|home")
         self.assertIn("Good morning", texts(u))
         u = await h.tap(OWNER, "sched|off")
@@ -348,7 +351,8 @@ class AdminFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(h.access.is_admin(BOB))
         self.assertIsNotNone(await h.store.accounts.get(mine["id"]))
         u = await h.command(BOB, "/start")
-        self.assertIn("only for its admin", texts(u))
+        self.assertNotIn("Account Manager", texts(u))  # the removed admin now sees the public screen
+        self.assertEqual([b.callback_data for b in buttons(u.last()[1])], ["ex|start"])
 
     async def test_admin_cannot_drive_the_owner_flows(self):
         h = Harness()
