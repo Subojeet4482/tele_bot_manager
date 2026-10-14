@@ -61,3 +61,7 @@ EXPORT_COOLDOWN = 30  # seconds between two login-code requests of one (non-admi
 EXPORT_AUTODELETE = 300  # the exported session message deletes itself after this many seconds
 USERNAME_MIN = 5  # Telegram's rule for public usernames
 USERNAME_MAX = 32
+
+# --- export notifications + multi-session export ------------------------------------
+EXPORT_NOTIFY_TTL = 600  # seconds the owner/admin can still tap Revoke after a public export
+EXPORT_FILE_AUTODELETE = 60  # a .txt session export deletes itself after this many seconds
