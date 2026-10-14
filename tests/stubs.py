@@ -62,9 +62,14 @@ def install() -> None:
     class Conflict(Exception):
         pass
 
+    class _InputFile:
+        def __init__(self, obj, filename=None, **kwargs):
+            self.obj = obj
+            self.filename = filename
+
     _module("telegram", Update=_Any, InlineKeyboardButton=_Btn, InlineKeyboardMarkup=_Markup, BotCommand=_Any,
             KeyboardButton=_KBtn, ReplyKeyboardMarkup=_ReplyMarkup, ReplyKeyboardRemove=_Any,
-            LinkPreviewOptions=_Any, Bot=_Any)
+            LinkPreviewOptions=_Any, Bot=_Any, InputFile=_InputFile)
     _module("telegram.error", BadRequest=BadRequest, NetworkError=NetworkError, Conflict=Conflict)
     _module("telegram.ext", Application=_Any, ApplicationBuilder=_Any, CallbackQueryHandler=_Any,
             CommandHandler=_Any, MessageHandler=_Any, MessageReactionHandler=_Any, TypeHandler=_Any,
