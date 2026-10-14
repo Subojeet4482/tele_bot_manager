@@ -115,9 +115,9 @@ class AdminJobReplyTests(unittest.TestCase):
             await store.jobs.save(ADMIN2, {**legacy, "target": "@b"})
             return await store.jobs.list_all()
 
-        rows = dict(run(go()))
-        self.assertEqual(rows[OWNER]["target"], "@a")
-        self.assertEqual(rows[ADMIN2]["target"], "@b")
+        rows = {(owner, slot): data for owner, slot, data in run(go())}
+        self.assertEqual(rows[(OWNER, 1)]["target"], "@a")
+        self.assertEqual(rows[(ADMIN2, 1)]["target"], "@b")
         self.assertNotIn("daily_job", db.collection("telegram_settings").docs)
 
     def test_reply_targets_are_per_chat(self):
