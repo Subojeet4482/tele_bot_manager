@@ -174,6 +174,7 @@ class TimedMessageTests(unittest.IsolatedAsyncioTestCase):
         await h.tap(OWNER, f"wz|message|pick|{acc['id']}")
         await h.say(OWNER, "@mandal4482")
         await h.say(OWNER, "later hello")
+        await h.tap(OWNER, "wz|message|pick|-")
         u = await h.tap(OWNER, "wz|message|pick|5")
         self.assertIn("Starts in 5m", texts(u))
         self.assertEqual(h.calls, [])  # nothing sent yet
