@@ -29,8 +29,8 @@ class WizardContext:
     def user_id(self) -> int:
         return self.update.effective_user.id
 
-    async def show(self, text: str, markup=None) -> None:
-        await ui.show(self.update, text, markup)
+    async def show(self, text: str, markup=None, parse_mode: str | None = None):
+        return await ui.show(self.update, text, markup, parse_mode)
 
 
 class WizardAbort(Exception):
@@ -50,6 +50,7 @@ class Step:
     back_key: str | None = None  # where Back goes, if not simply the previous step
     multi: bool = False  # several choices can be ticked; Done answers with the ticked values
     photo: bool = False  # the answer is a photo sent to the chat (its bytes land in state.media)
+    media: bool = False  # a photo step that also takes a GIF or a video (state.media_id / media_kind)
 
 
 @dataclass
@@ -59,5 +60,6 @@ class WizardSpec:
     steps: list[Step]
     finish: Callable[[WizardContext], Awaitable[None]]
     owner_only: bool = False
+    public: bool = False  # anybody may run it (the session export), not just admins
     back_to: str = "menu"  # screen shown on Back from the first step and on Cancel
     on_rewind: Callable[[WizardContext, str], Awaitable[None]] | None = None
