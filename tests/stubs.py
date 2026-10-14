@@ -19,6 +19,19 @@ class _Btn:
     def __init__(self, text, callback_data=None, **kwargs):
         self.text = text
         self.callback_data = callback_data
+        self.api_kwargs = kwargs.get("api_kwargs", {})
+
+
+class _KBtn:
+    def __init__(self, text, **kwargs):
+        self.text = text
+        self.api_kwargs = kwargs.get("api_kwargs", {})
+
+
+class _ReplyMarkup:
+    def __init__(self, keyboard, **kwargs):
+        self.keyboard = keyboard
+        self.kwargs = kwargs
 
 
 class _Markup:
@@ -50,11 +63,13 @@ def install() -> None:
         pass
 
     _module("telegram", Update=_Any, InlineKeyboardButton=_Btn, InlineKeyboardMarkup=_Markup, BotCommand=_Any,
+            KeyboardButton=_KBtn, ReplyKeyboardMarkup=_ReplyMarkup, ReplyKeyboardRemove=_Any,
             LinkPreviewOptions=_Any, Bot=_Any)
     _module("telegram.error", BadRequest=BadRequest, NetworkError=NetworkError, Conflict=Conflict)
     _module("telegram.ext", Application=_Any, ApplicationBuilder=_Any, CallbackQueryHandler=_Any,
             CommandHandler=_Any, MessageHandler=_Any, MessageReactionHandler=_Any, TypeHandler=_Any,
-            filters=types.SimpleNamespace(TEXT=1, COMMAND=2, PHOTO=3, Document=types.SimpleNamespace(IMAGE=4)))
+            filters=types.SimpleNamespace(TEXT=1, COMMAND=2, PHOTO=3, Document=types.SimpleNamespace(IMAGE=4),
+                                          ANIMATION=5, VIDEO=6, Regex=lambda pattern: 7, Entity=lambda kind: 8))
 
     class _Client:
         def __init__(self, *args, **kwargs):
@@ -79,7 +94,7 @@ def install() -> None:
     _module("telethon.tl.functions.contacts", BlockRequest=_Any)
     _module("telethon.tl.functions.messages", SendReactionRequest=_Any, ImportChatInviteRequest=_Any)
     _module("telethon.tl.functions.channels", JoinChannelRequest=_Any)
-    _module("telethon.tl.functions.account", UpdateProfileRequest=_Any)
+    _module("telethon.tl.functions.account", UpdateProfileRequest=_Any, UpdateUsernameRequest=_Any)
     _module("telethon.tl.functions.photos", UploadProfilePhotoRequest=_Any)
     _module("telethon.tl.types", ReactionEmoji=_Any, Channel=type("Channel", (), {}))
 
