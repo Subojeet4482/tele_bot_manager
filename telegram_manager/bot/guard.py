@@ -27,6 +27,11 @@ class Guard:
         await self._deny(update, DENY_TEXT)
         return False
 
+    async def allow_public(self, update) -> bool:
+        """For the few things anybody may do (session export of their own account): private chats only."""
+        chat = update.effective_chat
+        return chat is None or chat.type == "private"
+
     async def allow_owner(self, update) -> bool:
         if not await self.allow(update):
             return False
