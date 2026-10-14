@@ -51,7 +51,7 @@ class ManagerBase:
         self._reply_map: OrderedDict[tuple[int, int], tuple[str, int, int]] = OrderedDict()
         self._reply_map_limit = 1000
         self._background: set[asyncio.Task] = set()
-        self._daily: dict[int, tuple[Any, asyncio.Task]] = {}  # admin id -> (job, task)
+        self._daily: dict[tuple[int, int], tuple[Any, asyncio.Task]] = {}  # (admin id, slot) -> (job, task)
         self._watchdog_task: asyncio.Task | None = None
         self._watchdog_ticks = 0
         self._watchdog_last: float | None = None
