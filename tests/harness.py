@@ -147,6 +147,7 @@ class Harness:
             "msg_acc": p.commands.message_for_account, "stop_bulk": p.commands.stop_bulk, "logs": p.logs.logs,
             "wz": p.engine.on_callback, "pf": p.accounts.profile_button,
             "un": p.control.username_button, "exp": p.control.export_button, "help": p.start.help,
+            "expr": p.control.revoke_export_button,
         }
         special = {
             "fw|home": p.forwarding.home, "fw|accs": p.forwarding.account_picker, "msg|start": p.commands.message_button,
