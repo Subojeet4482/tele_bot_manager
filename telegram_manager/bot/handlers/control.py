@@ -32,11 +32,16 @@ class ControlHandlers(HandlerBase):
             return
         await ui.show(update, "✅ Username removed.", back)
 
-    # --- export a session of an own account: exp|pick, exp|ask|<id>, exp|go|<id> ---------------
+    # --- export a session of an own account: exp|pick, exp|ask|<id>, exp|go|<id>, exp|multi -----
     async def export_button(self, update, context) -> None:
         if not await self.entry(update):
             return
         action, _, account_id = self.arg(update).partition("|")
+        if action == "multi":
+            if await self.accounts_or_notice(update) is None:
+                return
+            await self.engine.start(update, context, "exp_multi")
+            return
         if action == "pick":
             accounts = await self.accounts_or_notice(update)
             if accounts is None:
@@ -69,6 +74,32 @@ class ControlHandlers(HandlerBase):
                 await ui.show(update, f"❌ Could not export it: {describe_error(exc)}", back)
                 return
             await ui.show(update, f"✅ The session of {label} is in the message below. Copy it now.", back)
+
+    # --- revoke a session that was just exported (public /export): expr|<token> ------------------
+    async def revoke_export_button(self, update, context) -> None:
+        if not await self.entry(update):
+            return
+        from telegram_manager.bot.flows.export import pop_revoke
+
+        token = self.arg(update)
+        pending = pop_revoke(token)
+        if pending is None:
+            await ui.show(update, "⌛ This Revoke button expired or was already used.", None)
+            return
+        try:
+            revoked = await self.manager.revoke_exported_session(
+                pending["session"], pending["api_id"], pending["api_hash"]
+            )
+        except Exception as exc:
+            await ui.show(update, f"❌ Could not revoke it: {describe_error(exc)}", None)
+            return
+        label = pending.get("label") or "That account"
+        text = (
+            f"✅ {label}'s exported session was revoked — it no longer works."
+            if revoked
+            else f"⚠️ Telegram did not confirm the revoke for {label} (it may already be invalid)."
+        )
+        await ui.show(update, text, None)
 
     # --- give accounts: give|start, give|acc|<id> --------------------------------------------------
     async def _give(self, update, context, answers: dict | None) -> None:
