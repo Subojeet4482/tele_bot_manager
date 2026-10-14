@@ -15,7 +15,7 @@ from telegram_manager.bot.flows.common import static
 from telegram_manager.bot.wizard.engine import ATTEMPT_KEY
 from telegram_manager.bot.wizard.spec import Step, WizardAbort, WizardContext, WizardSpec
 from telegram_manager.errors import AccountAlreadyConnectedError, describe_error
-from telegram_manager.parsing import parse_int
+from telegram_manager.parsing import looks_like_telethon_session, parse_int
 
 _API_HELP = "Get it at my.telegram.org → API development tools."
 
@@ -84,8 +84,12 @@ def build_connect_specs(deps) -> list[WizardSpec]:
 
     async def parse_session(wc: WizardContext, raw: str) -> str:
         value = raw.strip()
-        if len(value) < 20:
-            raise ValueError("That does not look like a session string.")
+        if not looks_like_telethon_session(value):
+            raise ValueError(
+                "That doesn't look like a Telethon session string (it should be one long base64 "
+                "piece of text with no spaces, usually 300+ characters). Paste the whole string, or "
+                "go Back and connect with a phone number instead."
+            )
         try:
             account = await manager.connect_with_session(
                 wc.user_id, wc.answers["api_id"], wc.answers["api_hash"], value
@@ -95,7 +99,9 @@ def build_connect_specs(deps) -> list[WizardSpec]:
         except ValueError:
             raise
         except Exception as exc:
-            raise ValueError(f"Could not log in with that session string: {describe_error(exc)}") from exc
+            raise ValueError(
+                f"The format looked right, but Telegram refused it: {describe_error(exc)}"
+            ) from exc
         wc.answers["connected"] = manager.label_for_account(account)
         return "ok"
 
@@ -147,13 +153,17 @@ def build_connect_specs(deps) -> list[WizardSpec]:
     )
     session = WizardSpec(
         name="cx_session",
-        title="🔑 Connect with session string",
+        title="🔑 Connect with any session (auto-detect)",
         steps=[
             api_id,
             api_hash,
             Step(
                 "session",
-                static("🔑 Send the Telethon session string.\nI delete your message right after reading it."),
+                static(
+                    "🔑 Paste the session string.\n\nI'll auto-detect whether it looks like a valid "
+                    "Telethon session before trying to log in with it, and delete your message right "
+                    "after reading it."
+                ),
                 parse_session,
                 sensitive=True,
             ),
