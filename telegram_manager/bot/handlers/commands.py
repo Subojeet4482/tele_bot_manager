@@ -8,7 +8,7 @@ from telegram_manager.bot.flows.bulk import KINDS
 from telegram_manager.bot.handlers.base import HandlerBase
 from telegram_manager.constants import BULK_DELAY_MAX, OPEN_CHAT_MIN_DELAY
 from telegram_manager.errors import describe_error
-from telegram_manager.parsing import parse_bulk_args, parse_target
+from telegram_manager.parsing import parse_bulk_args, parse_target, split_trailing_buttons
 
 _USAGE = {
     "all": "/all @user your message 3sec Y",
@@ -38,7 +38,10 @@ class CommandHandlers(HandlerBase):
         """Menu button bulk|<kind>."""
         if not await self.entry(update):
             return
-        kind = self.arg(update)
+        await self.open_bulk(update, context, self.arg(update))
+
+    async def open_bulk(self, update, context, kind: str) -> None:
+        """Start the step-by-step flow of one bulk action (from a button or from the bottom menu)."""
         if (kind not in KINDS and kind != "multi") or await self.accounts_or_notice(update) is None:
             return
         await self.engine.start(update, context, "multi" if kind == "multi" else f"bulk_{kind}")
@@ -131,7 +134,8 @@ class CommandHandlers(HandlerBase):
         """/message                → pick account, chat, text
         /message 1                → pick chat, text
         /message 1 @user          → text
-        /message 1 @user hello    → sends now"""
+        /message 1 @user hello    → sends now
+        /message 1 @user hello [follow] (join)   → sends, then presses those inline buttons"""
         if not await self.guard.allow(update):
             return
         raw = self.command_args(update).strip()
@@ -154,11 +158,21 @@ class CommandHandlers(HandlerBase):
                 await ui.show(update, f"❌ {exc}", keyboards.back("menu", "⚙️ Menu"))
                 return
         if match.group(3):
-            answers["text"] = match.group(3).strip()
-        if "text" in answers:  # everything given: send right away
             try:
+                text, buttons = split_trailing_buttons(match.group(3))
+            except ValueError as exc:
+                await ui.show(update, f"❌ {exc}", keyboards.back("menu", "⚙️ Menu"))
+                return
+            if text:
+                answers["text"] = text
+            if buttons:
+                answers["buttons"] = buttons
+        if "text" in answers:  # everything given: send right away
+            answers.setdefault("buttons", [])
+            try:
+                extra = {"buttons": answers["buttons"]} if answers["buttons"] else {}
                 await self.manager.send_to_existing_dialog(
-                    answers["account"], answers["chat"], answers["text"], self.uid(update)
+                    answers["account"], answers["chat"], answers["text"], self.uid(update), **extra
                 )
             except Exception as exc:
                 await ui.show(update, f"❌ Could not send: {describe_error(exc)}", keyboards.back("menu", "⚙️ Menu"))
