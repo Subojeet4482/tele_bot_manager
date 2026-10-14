@@ -75,6 +75,9 @@ class FakeMessage:
         self.deleted = False
         self.reply_to_message = None
         self.photo = None
+        self.animation = None
+        self.video = None
+        self.entities = []
         self.message_id = next(_ids)
 
     async def reply_text(self, text, reply_markup=None, **kwargs):
@@ -106,7 +109,7 @@ class FakeQuery:
     async def answer(self, text=None, show_alert=False):
         self.answers.append((text, show_alert))
 
-    async def edit_message_text(self, text, reply_markup=None):
+    async def edit_message_text(self, text, reply_markup=None, **kwargs):
         self.edits.append((text, reply_markup))
 
 
@@ -128,6 +131,10 @@ class FakeUpdate:
         self.effective_message.photo = [photo]
         return self
 
+    def with_media(self, kind: str, file_id: str) -> "FakeUpdate":
+        setattr(self.effective_message, kind, SimpleNamespace(file_id=file_id))
+        return self
+
     def last(self):
         """(text, markup) of the latest thing the bot showed."""
         if self.callback_query is not None:
@@ -139,6 +146,9 @@ class FakeBot:
     def __init__(self):
         self.sent: list[tuple[int, str]] = []
         self.edits: list[tuple[int, int, str]] = []  # (chat, message id, text) of edit_message_text calls
+        self.media: list[tuple[int, str, object]] = []  # (chat, kind, file id) of GIFs / videos sent
+        self.deleted: list[tuple[int, int]] = []
+        self.keyboards: list[tuple[int, object]] = []  # reply keyboards the bot put under a chat
 
     async def edit_message_text(self, chat_id, message_id, text, reply_markup=None, **kwargs):
         self.edits.append((chat_id, message_id, text))
@@ -146,11 +156,35 @@ class FakeBot:
 
     async def send_message(self, chat_id, text, **kwargs):
         self.sent.append((chat_id, text))
+        markup = kwargs.get("reply_markup")
+        if markup is not None and hasattr(markup, "keyboard"):
+            self.keyboards.append((chat_id, markup))
         return SimpleNamespace(message_id=next(_ids))
 
     async def send_sticker(self, chat_id, sticker, **kwargs):
         self.sent.append((chat_id, "<sticker>"))
         return SimpleNamespace(message_id=next(_ids))
+
+    async def send_photo(self, chat_id, photo, caption=None, **kwargs):
+        self.sent.append((chat_id, caption or "<photo>"))
+        return SimpleNamespace(message_id=next(_ids), photo=[SimpleNamespace(file_id=f"photo{next(_ids)}")])
+
+    async def send_animation(self, chat_id, animation, caption=None, **kwargs):
+        self.sent.append((chat_id, caption or "<animation>"))
+        self.media.append((chat_id, "animation", animation))
+        return SimpleNamespace(message_id=next(_ids))
+
+    async def send_video(self, chat_id, video, caption=None, **kwargs):
+        self.sent.append((chat_id, caption or "<video>"))
+        self.media.append((chat_id, "video", video))
+        return SimpleNamespace(message_id=next(_ids))
+
+    async def send_chat_action(self, chat_id, action, **kwargs):
+        return True
+
+    async def delete_message(self, chat_id, message_id, **kwargs):
+        self.deleted.append((chat_id, message_id))
+        return True
 
     async def get_chat(self, user_id):
         return SimpleNamespace(full_name=f"Name {user_id}", username=None)
