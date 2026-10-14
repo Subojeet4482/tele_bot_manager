@@ -6,7 +6,7 @@
 
 [**Open the bot → @telethon_manager_bot**](https://t.me/telethon_manager_bot)
 
-`Python 3.11+` · `Telethon` · `python-telegram-bot` · `Firebase Firestore` · `169 tests passing`
+`Python 3.11+` · `Telethon` · `python-telegram-bot` · `Firebase Firestore` · `207 tests passing`
 
 </div>
 
@@ -30,6 +30,12 @@
 - **Auto-click buttons.** `/all @bot hello [follow] (join)` presses the bot's inline buttons by name, and joins the channel behind a link button.
 - **Refresh.** 🔄 Refresh on the accounts list re-reads every account's name from Telegram; accounts are always shown in number order.
 - **Multi-admin.** The owner adds admins; every admin sees and controls only their own accounts.
+- **Give accounts away.** The owner gives chosen (or all) accounts to an admin; an admin gives accounts to the owner. Open `🎁 Give accounts`, or the button on an account's screen.
+- **Full account control.** Tap an account: see its number, add / change / remove its @username, change name, photo and bio, export its session, give it away or log it out.
+- **Several daily broadcasts.** Up to 10 per owner/admin, each with its own message, accounts, delay and times; view, replace or delete them one by one.
+- **Start screen.** Any admin can set a welcome text (`{name}` = first name) and an image from inside the bot (`/startscreen`).
+- **Session export for anybody.** Someone who is not an admin can log in with their own number and code and get the session string of *that* account only. Nothing is stored. The owner can switch it off.
+- **Coloured buttons.** Inline buttons use Telegram's new button colours (green / red / blue) on current apps; older apps show them normally.
 - **Safe by design.** Sessions and API hashes are encrypted, secrets typed in chat are deleted, logs hold no message text.
 - **Self-healing.** Connection watchdog, auto-reconnect, and an instance lease so two copies never fight over one session.
 
@@ -65,7 +71,7 @@ Set `OWNER_ID` to your numeric Telegram ID (ask [@userinfobot](https://t.me/user
 
 ## 🤖 Using the bot
 
-`/start` shows **Connect account · Logout account · My accounts · (owner: Manage admins) · Menu**.
+`/start` shows a status card (accounts online, forwarding switches, daily broadcasts) with the start photo / GIF / video, and puts the **quick menu** under the chat: a bottom keyboard with the same actions as the buttons (**Connect Account** in green, **Logout** in red, the rest blue). `/keyboard` brings it back, `/hidekeyboard` removes it.
 `/menu` shows every action as a button. Every step-by-step screen has **⬅️ Back** and **❌ Cancel**.
 
 | Command | What it does |
@@ -76,8 +82,14 @@ Set `OWNER_ID` to your numeric Telegram ID (ask [@userinfobot](https://t.me/user
 | `/multi` | Message a user from the accounts **you choose** (tick them, then Done; opens the chat if needed) |
 | `/click` | Press a bot's inline buttons from all accounts, no message: `/click @bot [follow] (join)` |
 | `/refresh` | Re-read all account names from Telegram and show the list in number order |
-| `/broadcast` | Open the daily broadcast screen (all accounts or chosen accounts) |
-| `/message` | Send from one account (pick account → chat → text) |
+| `/broadcast` | Daily broadcasts screen: up to 10 at once, each from all accounts or chosen accounts |
+| `/give` | Give accounts away: the owner picks an admin, an admin gives to the owner |
+| `/export` | Admins: session string of one of their accounts. Anybody else: log in and export their own |
+| `/startscreen` | Set the start **photo, GIF or video** and welcome text, switch public export on/off |
+| `/keyboard` `/hidekeyboard` | Show / hide the quick menu under the chat |
+| `/emojiid` | Send a message with custom emoji and get their IDs (for `BUTTON_ICONS`) |
+| `/help` | Every command as a button |
+| `/message` | Send from one account (pick account → chat → text). `/message 1 @user hi [follow] (join)` also presses inline buttons |
 | `/usermessage` `/botmessage` `/channelmessage` | Forwarding switch for one account (opens a screen with buttons) |
 | `/list` | Your accounts |
 | `/logs` | (owner) one-time link to the live logs |
@@ -233,6 +245,7 @@ A trailing `Y`/`N` and a trailing `3sec` are read as options, so a message that 
 | `SELF_PING_URL`, `SELF_PING_INTERVAL` | | Keep-awake ping. Interval `0` = off, otherwise at least 30 (default 600) |
 | `PUBLIC_URL` | | Address used for the one-time `/logs` link (auto-detected on Render) |
 | `INSTANCE_LEASE` | | `on` (default) stops two copies using the same sessions. Keep it on. |
+| `BUTTON_ICONS` | | Custom emoji on buttons, JSON `{"🔗": "<custom emoji id>"}` (leading emoji → id). Needs the **bot owner to have Telegram Premium**. Empty = normal emoji. |
 
 **Troubleshooting — `SESSION_ENCRYPTION_KEY is not a valid Fernet key`:** the value is incomplete or has extra text around it. Generate a fresh key with the command in [Quick start](#-quick-start), or re-paste the existing one in full. **Never replace the key of a running setup:** saved sessions can only be read with the key that encrypted them.
 
@@ -311,3 +324,22 @@ telegram_manager/
     handlers/ start accounts forwarding commands schedule admins logs text
 tests/
 ```
+
+
+---
+
+## 🆕 What changed in this version
+
+- **Daily broadcasts** are now stored as `telegram_daily_jobs/<admin id>_<slot>`. An old single job (`<admin id>`) is moved to slot 1 on the first start.
+- **Giving an account** changes its owner and gives it the next free number in its new place. The account stays connected; it is removed from the old holder's chosen-account broadcasts.
+- **Session export** (public): needs the person's own API ID/hash, number and code (+ 2-step password). It disconnects without logging out, so the exported session stays valid. The message with the session deletes itself after 5 minutes. One code request per 30 seconds per person.
+- **Start screen settings** live in `telegram_settings/start_screen` (`text`, `photo`, `public_export`).
+- Buttons get their colour through `style` (Bot API 9.4+). With python-telegram-bot 21.6 it is sent via `api_kwargs`; newer versions take it natively.
+
+### 🎨 UI upgrade (Bot API 9.4 – 10.3)
+
+- **Quick menu (bottom keyboard)**: persistent reply keyboard with coloured buttons (`style`: `success` green, `primary` blue, `danger` red). A tap shows a short *⏳ Loading…* line, then the screen (the line is removed). Pressing a button also leaves any half-finished step, like a command does. Layout and labels: `telegram_manager/bot/reply_menu.py` (`LAYOUT`).
+- **Start screen**: HTML card with a live status quote and a collapsed command list (`<blockquote expandable>`). The media on top can be a **photo, GIF or video** (`/startscreen` → *Photo / GIF / Video*). GIF and video are stored by file id, nothing is downloaded. Old `photo` settings keep working. With media, the text is kept inside the 1024-character caption limit by dropping the optional blocks first.
+- **Custom emoji on buttons** (`icon_custom_emoji_id`): set `BUTTON_ICONS`; every button whose text starts with that emoji gets the custom one (the plain emoji is removed from the text so it is not shown twice). Telegram rejects custom emoji when the bot owner has no Premium, so this is off by default.
+- Pagination buttons in step-by-step lists are blue.
+- Not used on purpose: Rich Messages (10.1+), ephemeral messages and communities (group features), message streaming drafts: they do not fit a private-chat control bot.
