@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 
 from telegram_manager.bot import keyboards
-from telegram_manager.bot.flows.common import static, text_step, when_step
+from telegram_manager.bot.flows.common import buttons_step, static, text_step, when_step
 from telegram_manager.bot.wizard.spec import Choice, Step, WizardContext, WizardSpec
 from telegram_manager.constants import DIALOG_FETCH_LIMIT
 from telegram_manager.errors import describe_error
@@ -54,6 +54,7 @@ def build_message_spec(deps) -> WizardSpec:
         Step("account", static("💬 Choose the account to send from."), parse_account, account_choices),
         Step("chat", chat_prompt, parse_chat, chat_choices, paged=True),
         text_step("✉️ Send the message text."),
+        buttons_step(),
         when_step(),
     ]
 
@@ -70,10 +71,14 @@ def build_message_spec(deps) -> WizardSpec:
                 0,
                 account_ids=[answers["account"]],
                 start_in=answers["when"] * 60,
+                buttons=answers.get("buttons") or None,
             )
             return
         try:
-            await manager.send_to_existing_dialog(answers["account"], answers["chat"], answers["text"], wc.user_id)
+            extra = {"buttons": answers["buttons"]} if answers.get("buttons") else {}
+            await manager.send_to_existing_dialog(
+                answers["account"], answers["chat"], answers["text"], wc.user_id, **extra
+            )
         except Exception as exc:
             await wc.show(
                 f"❌ Could not send: {describe_error(exc)}", keyboards.after_action("🔁 Try again", "msg|start")
