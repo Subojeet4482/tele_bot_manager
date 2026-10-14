@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import base64
 import binascii
+import json
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -29,6 +30,7 @@ class Settings:
     bot_user_id: int = 0
     public_url: str | None = None
     instance_lease: bool = True
+    button_icons: dict = field(default_factory=dict)  # leading emoji -> custom emoji id (see BUTTON_ICONS)
 
     @property
     def secure_cookies(self) -> bool:
@@ -114,6 +116,21 @@ class Settings:
         except (ZoneInfoNotFoundError, ValueError) as exc:
             raise RuntimeError(f"TIMEZONE '{timezone_name}' is not a valid IANA timezone (e.g. Asia/Kolkata)") from exc
 
+        button_icons: dict[str, str] = {}
+        raw_icons = os.getenv("BUTTON_ICONS", "").strip()
+        if raw_icons:
+            try:
+                parsed = json.loads(raw_icons)
+                if not isinstance(parsed, dict) or not all(
+                    isinstance(k, str) and re.fullmatch(r"\d{5,25}", str(v)) for k, v in parsed.items()
+                ):
+                    raise ValueError
+                button_icons = {k: str(v) for k, v in parsed.items()}
+            except ValueError as exc:  # json.JSONDecodeError is a ValueError
+                raise RuntimeError(
+                    'BUTTON_ICONS must be a JSON object like {"🔗": "5368324170671202286"} (emoji -> custom emoji id)'
+                ) from exc
+
         return cls(
             bot_token=required["BOT_TOKEN"],
             owner_id=owner_id,
@@ -128,4 +145,5 @@ class Settings:
             bot_user_id=bot_user_id,
             public_url=public_url,
             instance_lease=instance_lease,
+            button_icons=button_icons,
         )
