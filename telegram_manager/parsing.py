@@ -106,6 +106,21 @@ def parse_button_names(raw: str) -> list[str]:
     return names
 
 
+def split_trailing_buttons(raw: str) -> tuple[str, list[str]]:
+    """"hello [follow] (join)" -> ("hello", ["follow", "join"]): button names written at the end."""
+    remainder = (raw or "").rstrip()
+    buttons: list[str] = []
+    while True:
+        match = _TAIL_BUTTON.search(remainder)
+        if not match:
+            break
+        buttons.insert(0, (match.group(1) or match.group(2)).strip())
+        remainder = remainder[: match.start()]
+    if len(buttons) > AUTOCLICK_MAX_BUTTONS:
+        raise ValueError(f"At most {AUTOCLICK_MAX_BUTTONS} button names at a time.")
+    return remainder.strip(), buttons
+
+
 @dataclass
 class BulkArgs:
     target: str | None = None
