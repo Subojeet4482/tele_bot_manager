@@ -90,17 +90,21 @@ def build_schedule_spec(deps) -> WizardSpec:
             a["target"], a["text"], a["delay"], a["time"], a["count"],
             account_ids=picked, buttons=list(a.get("buttons") or []),
         )
-        await manager.start_daily_job(wc.user_id, job)
+        try:
+            slot = await manager.start_daily_job(wc.user_id, job, a.get("slot"))
+        except ValueError as exc:
+            await wc.show(f"❌ {exc}", keyboards.schedule_overview(manager, wc.user_id))
+            return
         accounts = [x for x in await store.accounts.list(wc.user_id) if x.get("enabled", True)]
         if picked is not None:
             accounts = [x for x in accounts if str(x["id"]) in picked]
         note = ""
-        slot = 86400 / job.times_per_day
-        if accounts and (len(accounts) - 1) * job.delay_seconds > slot:
+        gap = 86400 / job.times_per_day
+        if accounts and (len(accounts) - 1) * job.delay_seconds > gap:
             note = "\n\n⚠️ One run takes longer than the gap between runs, so some runs will be skipped."
         await wc.show(
-            "✅ Daily broadcast scheduled.\n\n" + manager.daily_job_status(wc.user_id) + note,
-            keyboards.schedule_home(True),
+            f"✅ Daily broadcast #{slot} scheduled.\n\n" + manager.daily_job_status(wc.user_id, slot) + note,
+            keyboards.schedule_overview(manager, wc.user_id),
         )
 
     steps = [
