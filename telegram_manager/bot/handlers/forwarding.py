@@ -76,11 +76,12 @@ class ForwardingHandlers(HandlerBase):
         await ui.show(
             update,
             f"📱 {account.get('number')}. {self.manager.label_for_account(account)} — {dot}\n"
-            + (f"📞 {account['phone_masked']}\n" if account.get("phone_masked") else "")
+            + (f"📞 {account.get('phone') or account['phone_masked']}\n" if account.get("phone") or account.get("phone_masked") else "")
+            + (f"🔤 @{account['username']}\n" if account.get("username") else "🔤 No username\n")
             + "\n"
             "Tap a switch to change it. It cycles: default → ON → OFF → default.\n"
             "“Default” follows your setting in Menu → Forwarding.",
-            keyboards.account_screen(str(account["id"]), labels),
+            keyboards.account_screen(str(account["id"]), labels, has_username=bool(account.get("username"))),
         )
 
     async def cycle(self, update, context) -> None:
