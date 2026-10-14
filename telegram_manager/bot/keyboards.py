@@ -10,6 +10,8 @@ sched|home|new|off|view|edit|del, adm|home|add|remove, logs|link
 give|start|acc|<id>    hand accounts to the owner / an admin
 un|set|rm|<id>         set or remove an account's @username
 exp|pick|ask|go|<id>   export a session string of an own account
+exp|multi              export several accounts' sessions at once, as a .txt file
+expr|<token>           owner/admin taps Revoke on a "a session was exported" notification
 sc|home|text|photo|rmphoto|reset|preview|pub   start screen settings
 ex|start               public session export (anybody); help = all commands as buttons
 wz|<wizard>|<action>|<arg>   inside step-by-step flows (see bot/wizard)
@@ -123,6 +125,7 @@ def start_keyboard(is_owner: bool) -> Markup:
     rows = [
         [Btn("🔗 Connect account", callback_data="connect", style="success"), Btn("📋 My accounts", callback_data="acc_list")],
         [Btn("🎁 Give accounts", callback_data="give|start"), Btn("📤 Export session", callback_data="exp|pick")],
+        [Btn("📦 Export multiple (.txt)", callback_data="exp|multi")],
         [Btn("🕒 Daily broadcasts", callback_data="sched|home"), Btn("🎨 Start screen", callback_data="sc|home")],
         [Btn("🚪 Logout account", callback_data="logout")],
     ]
@@ -149,6 +152,7 @@ def help_keyboard(is_owner: bool) -> Markup:
         [Btn("📋 /list", callback_data="acc_list"), Btn("🔄 /refresh", callback_data="acc_refresh")],
         [Btn("📥 Forwarding switches", callback_data="fw|home"), Btn("🕒 /broadcast", callback_data="sched|home")],
         [Btn("🎁 /give", callback_data="give|start"), Btn("📤 /export", callback_data="exp|pick")],
+        [Btn("📦 Export multiple", callback_data="exp|multi")],
         [Btn("🎨 /startscreen", callback_data="sc|home"), Btn("🔗 Connect", callback_data="connect")],
     ]
     if is_owner:
@@ -168,6 +172,7 @@ def menu_keyboard(is_owner: bool) -> Markup:
         [Btn("📥 Forwarding", callback_data="fw|home"), Btn("🕒 Daily broadcast", callback_data="sched|home")],
         [Btn("📋 My accounts", callback_data="acc_list"), Btn("🔄 Refresh names", callback_data="acc_refresh")],
         [Btn("🎁 Give accounts", callback_data="give|start"), Btn("📤 Export session", callback_data="exp|pick")],
+        [Btn("📦 Export multiple (.txt)", callback_data="exp|multi")],
         [Btn("🎨 Start screen", callback_data="sc|home"), Btn("📖 All commands", callback_data="help")],
     ]
     if is_owner:
@@ -179,7 +184,7 @@ def menu_keyboard(is_owner: bool) -> Markup:
 def connect_keyboard() -> Markup:
     return _markup([
         [Btn("📱 Phone number + code", callback_data="cx|otp")],
-        [Btn("🔑 Session string", callback_data="cx|session")],
+        [Btn("🔑 Any session string (auto-detect)", callback_data="cx|session")],
         [Btn("⬅️ Back", callback_data="home")],
     ])
 
@@ -206,7 +211,7 @@ def accounts_list(accounts: list[dict], online) -> Markup:
         for a in accounts
     ]
     rows.append([Btn("🔄 Refresh", callback_data="acc_refresh"), Btn("🔗 Connect account", callback_data="connect")])
-    rows.append([Btn("🎁 Give accounts", callback_data="give|start")])
+    rows.append([Btn("🎁 Give accounts", callback_data="give|start"), Btn("📦 Export multiple", callback_data="exp|multi")])
     rows.append([Btn("⬅️ Back", callback_data="home")])
     return _markup(rows)
 
@@ -294,6 +299,11 @@ def export_confirm(account_id: str) -> Markup:
         [Btn("✅ Yes, show the session", callback_data=f"exp|go|{account_id}")],
         [Btn("⬅️ Back", callback_data=f"acc|{account_id}")],
     ])
+
+
+def revoke_confirm(token: str) -> Markup:
+    """Attached to the 'a session was exported' notification sent to the owner/admin."""
+    return _markup([[Btn("🗑 Revoke this session", callback_data=f"expr|{token}", style="danger")]])
 
 
 def admins_home(can_remove: bool) -> Markup:
