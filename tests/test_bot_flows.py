@@ -190,10 +190,16 @@ class AccessTests(unittest.IsolatedAsyncioTestCase):
         self.owner_acc = await self.h.add_account(OWNER, "Owner A")
         self.bob_acc = await self.h.add_account(BOB, "Bob A")
 
-    async def test_stranger_is_told_admins_only_once_in_a_while(self):
+    async def test_stranger_start_shows_the_public_screen(self):
         u = await self.h.command(STRANGER, "/start")
+        self.assertIn("export the session string of your own", texts(u))
+        self.assertEqual([b.callback_data for b in buttons(u.last()[1])], ["ex|start"])
+        self.assertNotIn("Account Manager", texts(u))
+
+    async def test_stranger_is_told_admins_only_once_in_a_while(self):
+        u = await self.h.command(STRANGER, "/menu")
         self.assertEqual(texts(u), "🚫 This bot is only for its admin.")
-        u2 = await self.h.command(STRANGER, "/start")
+        u2 = await self.h.command(STRANGER, "/menu")
         self.assertEqual(u2.effective_message.replies, [])  # rate limited
         u3 = await self.h.tap(STRANGER, "menu")
         self.assertEqual(u3.callback_query.answers[-1], ("🚫 This bot is only for its admin.", True))
@@ -224,7 +230,7 @@ class AccessTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("👑 Manage admins", bob_labels)
         for labels in (owner_labels, bob_labels):
             self.assertIn("🔗 Connect account", labels)
-            self.assertEqual(labels[-1], "⚙️ Menu")  # Menu sits under the account buttons
+            self.assertEqual(labels[-2:], ["⚙️ Menu", "📖 All commands"])  # Menu sits under the account buttons
 
     async def test_menu_lists_everything_as_buttons(self):
         u = await self.h.command(OWNER, "/menu")
