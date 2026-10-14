@@ -229,6 +229,7 @@ def build_application(settings, log_buffer=None, log_access=None, health=None) -
         (r"^help$", start.help),
         (r"^un\|", control.username_button),
         (r"^exp\|", control.export_button),
+        (r"^expr\|", control.revoke_export_button),
         (r"^give\|start$", control.give_start),
         (r"^give\|acc\|", control.give_account),
         (r"^sc\|preview$", start.preview),
