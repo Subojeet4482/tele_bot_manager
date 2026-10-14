@@ -51,7 +51,7 @@ class AccountHandlers(HandlerBase):
             label = self.manager.label_for_account(account)
             phone = f" · {account['phone_masked']}" if account.get("phone_masked") else ""
             lines.append(f"{account.get('number')}. {label}{phone} {'🟢' if online else '🔴 offline'}")
-        lines += ["", "Tap an account to change its forwarding or profile (name, photo, bio), message from it, or log it out."]
+        lines += ["", "Tap an account for full control: number, username, name, photo, bio, forwarding, session export, give it away or log it out."]
         if footer:
             lines += ["", footer]
         await ui.show(update, "\n".join(lines), keyboards.accounts_list(accounts, self.manager.is_online))
