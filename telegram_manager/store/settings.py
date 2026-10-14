@@ -14,6 +14,8 @@ class SettingsStore:
     def __init__(self, db, default_owner_id: int) -> None:
         self._docs = db.collection("telegram_admin_settings")
         self._legacy = db.collection("telegram_settings").document("global")
+        self._start = db.collection("telegram_settings").document("start_screen")
+        self._start_cache: dict | None = None
         self._default_owner_id = default_owner_id
         self._cache: dict[int, dict] = {}
         self._versions: dict[int, int] = {}
@@ -67,3 +69,34 @@ class SettingsStore:
 
     async def set_counter(self, owner_id: int, value: int) -> None:
         await self._write(owner_id, {"next_account_number": int(value)})
+
+    # --- start screen: one for the whole bot, shown to everybody who sends /start ----------
+    async def get_start_screen(self) -> dict:
+        """{"text", "media" (file id), "media_type" (photo|animation|video), "photo" (old), "public_export"}; missing = default."""
+        if self._start_cache is None:
+            try:
+                snapshot = await asyncio.to_thread(self._start.get)
+                self._start_cache = (snapshot.to_dict() or {}) if snapshot.exists else {}
+            except Exception as exc:
+                logger.warning("Could not load the start screen settings: %s", exc)
+                return {}
+        return dict(self._start_cache)
+
+    @staticmethod
+    def start_media(cfg: dict) -> tuple[str | None, str]:
+        """(file id, kind) of the start screen's picture / GIF / video. Old settings only have `photo`."""
+        if cfg.get("media"):
+            return cfg["media"], cfg.get("media_type") or "photo"
+        if cfg.get("photo"):
+            return cfg["photo"], "photo"
+        return None, "photo"
+
+    async def set_start_screen(self, **values) -> None:
+        await asyncio.to_thread(self._start.set, values, merge=True)
+        self._start_cache = None
+
+    async def clear_start_screen(self) -> None:
+        """Back to the built-in welcome text and no image (keeps the public-export switch)."""
+        current = await self.get_start_screen()
+        await asyncio.to_thread(self._start.set, {"public_export": bool(current.get("public_export", True))})
+        self._start_cache = None
