@@ -5,6 +5,7 @@ import logging
 
 from telegram.error import Conflict, NetworkError
 
+from telegram_manager.bot import reply_menu
 from telegram_manager.errors import describe_error
 from telegram_manager.log_setup import mask_id
 
@@ -29,15 +30,17 @@ class Middleware:
         if query is not None:
             data = query.data or ""
             logger.info("Button tap | user=%s admin=%s action=%s", mask_id(uid), admin, data.split("|", 1)[0])
-            if admin and not data.startswith("wz|"):
-                await self.engine.reset(context)
+            if not data.startswith("wz|"):
+                await self.engine.reset(context)  # also closes a stranger's half-finished export login
         elif message is not None and (message.text or "").startswith("/"):
             command = message.text.split(maxsplit=1)[0].split("@")[0]
             logger.info("Command | user=%s admin=%s cmd=%s", mask_id(uid), admin, command)
-            if admin:
-                await self.engine.reset(context)
+            await self.engine.reset(context)
+        elif message is not None and reply_menu.lookup(message.text) is not None:
+            logger.info("Menu button | user=%s admin=%s action=%s", mask_id(uid), admin, reply_menu.lookup(message.text).key)
+            await self.engine.reset(context)  # like a command: leave any half-finished flow
         elif message is not None and message.text:
-            state = self.engine.active(context) if admin else None
+            state = self.engine.active(context)
             logger.info(
                 "Text message | user=%s admin=%s chars=%d step=%s reply=%s",
                 mask_id(uid),
