@@ -3,7 +3,8 @@ from __future__ import annotations
 
 from telegram_manager.bot import keyboards
 from telegram_manager.bot.flows.common import static
-from telegram_manager.bot.wizard.spec import Step, WizardContext, WizardSpec
+from telegram_manager.bot.wizard.spec import Choice, Step, WizardContext, WizardSpec
+from telegram_manager.core.accountctl import parse_username
 from telegram_manager.core.profile import MAX_BIO, MAX_NAME
 from telegram_manager.errors import describe_error
 
@@ -107,4 +108,36 @@ def build_profile_specs(deps) -> list[WizardSpec]:
         finish=photo_finish,
         back_to="acc_list",
     )
-    return [name_spec, bio_spec, photo_spec]
+    # --- username -----------------------------------------------------------------------------
+    async def username_prompt(wc: WizardContext) -> str:
+        account = await store.accounts.get(wc.answers["account"], owner_id=wc.user_id)
+        now = f"@{account['username']}" if account and account.get("username") else "none"
+        return (
+            f"🔤 Username now: {now}\n\nSend the new username (5–32 characters: letters, digits, _), "
+            "or - to remove it."
+        )
+
+    async def parse_name(wc: WizardContext, raw: str) -> str:
+        value = parse_username(raw)  # "" = remove
+        return value or "-"
+
+    async def username_choices(wc: WizardContext):
+        return [Choice("🗑 Remove username", "-")]
+
+    async def username_finish(wc: WizardContext) -> None:
+        new = "" if wc.answers["username"] == "-" else wc.answers["username"]
+        try:
+            await manager.set_username(wc.answers["account"], wc.user_id, new)
+        except Exception as exc:
+            await failed(wc, exc)
+            return
+        await done(wc, "✅ Username removed." if not new else f"✅ Username is now @{new}.")
+
+    username_spec = WizardSpec(
+        name="pf_username",
+        title="🔤 Username",
+        steps=[Step("username", username_prompt, parse_name, username_choices)],
+        finish=username_finish,
+        back_to="acc_list",
+    )
+    return [name_spec, bio_spec, photo_spec, username_spec]
