@@ -149,6 +149,7 @@ class FakeBot:
         self.media: list[tuple[int, str, object]] = []  # (chat, kind, file id) of GIFs / videos sent
         self.deleted: list[tuple[int, int]] = []
         self.keyboards: list[tuple[int, object]] = []  # reply keyboards the bot put under a chat
+        self.documents: list[tuple[int, str, str]] = []  # (chat, filename, text content) of files sent
 
     async def edit_message_text(self, chat_id, message_id, text, reply_markup=None, **kwargs):
         self.edits.append((chat_id, message_id, text))
@@ -178,6 +179,14 @@ class FakeBot:
         self.sent.append((chat_id, caption or "<video>"))
         self.media.append((chat_id, "video", video))
         return SimpleNamespace(message_id=next(_ids))
+
+    async def send_document(self, chat_id, document, caption=None, **kwargs):
+        self.sent.append((chat_id, caption or "<document>"))
+        content = getattr(document, "obj", document)
+        if isinstance(content, (bytes, bytearray)):
+            content = content.decode("utf-8", "replace")
+        self.documents.append((chat_id, getattr(document, "filename", None), content))
+        return FakeMessage()
 
     async def send_chat_action(self, chat_id, action, **kwargs):
         return True
