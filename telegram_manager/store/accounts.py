@@ -154,6 +154,22 @@ class AccountStore:
         finally:
             self._touch()
 
+    async def transfer(self, account_id: str, new_owner_id: int) -> dict:
+        """Give an account to another admin. It gets the next free number in its new place."""
+        async with self._create_lock:
+            row = await self.get(account_id)
+            if row is None:
+                raise ValueError("Account not found")
+            existing = await self.list(new_owner_id)
+            counter = await self._settings.get_counter(new_owner_id)
+            number = max(counter, max((r.get("number", 0) for r in existing), default=0) + 1)
+            await self.update(account_id, {"owner_id": new_owner_id, "number": number})
+            try:
+                await self._settings.set_counter(new_owner_id, number + 1)
+            except Exception as exc:  # only a high-water mark
+                logger.warning("Could not save the account counter: %s", exc)
+            return {**row, "owner_id": new_owner_id, "number": number}
+
     async def delete(self, account_id: str) -> None:
         self._touch()
         try:
