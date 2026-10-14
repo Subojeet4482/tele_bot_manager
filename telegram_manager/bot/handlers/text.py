@@ -13,9 +13,20 @@ MAX_PHOTO_BYTES = 10 * 1024 * 1024  # Telegram accepts profile photos far below 
 
 
 class TextHandlers(HandlerBase):
+    async def _allowed(self, update, context) -> bool:
+        """Admins always; somebody else only while they are inside the public session export."""
+        await self.deps.access.ensure_loaded()
+        if self.deps.access.is_admin(self.uid(update)):
+            return True
+        state = self.engine.active(context)
+        spec = self.engine.specs.get(state.name) if state is not None else None
+        if spec is not None and spec.public and await self.guard.allow_public(update):
+            return True
+        return await self.guard.allow(update)  # tells them it is for admins
+
     async def photo_input(self, update, context) -> None:
         """A photo (or image file) sent to the bot: only used by a step that asks for one."""
-        if not await self.guard.allow(update):
+        if not await self._allowed(update, context):
             return
         message = update.effective_message
         state = self.engine.active(context)
@@ -32,10 +43,45 @@ class TextHandlers(HandlerBase):
         except Exception as exc:
             await message.reply_text(f"❌ Could not read that photo: {describe_error(exc)}")
             return
-        await self.engine.on_photo(update, context, data)
+        await self.engine.on_photo(update, context, data, getattr(source, "file_id", None))
+
+    async def media_input(self, update, context) -> None:
+        """A GIF or a video sent to the bot: only used by a step that asks for one (the start screen)."""
+        if not await self._allowed(update, context):
+            return
+        message = update.effective_message
+        animation = getattr(message, "animation", None)
+        video = getattr(message, "video", None)
+        kind, source = ("animation", animation) if animation else ("video", video)
+        if source is None:
+            return
+        await self.engine.on_media(update, context, kind, source.file_id)
+
+    async def custom_emoji_input(self, update, context) -> None:
+        """An admin sends a message with custom emoji: tell them the IDs (for BUTTON_ICONS)."""
+        if self.engine.active(context) is not None:
+            await self.text_input(update, context)  # a flow is waiting for text: this is its answer
+            return
+        if not await self._allowed(update, context):
+            return
+        message = update.effective_message
+        text = message.text or ""
+        raw = text.encode("utf-16-le")
+        found = []
+        for entity in message.entities or []:
+            if getattr(entity, "type", "") != "custom_emoji":
+                continue
+            char = raw[entity.offset * 2 : (entity.offset + entity.length) * 2].decode("utf-16-le", "ignore")
+            found.append((char, entity.custom_emoji_id))
+        if not found:
+            return
+        lines = ["🔎 Custom emoji IDs:"] + [f"{char} → {emoji_id}" for char, emoji_id in found]
+        sample = ", ".join(f'"{char}": "{emoji_id}"' for char, emoji_id in found)
+        lines += ["", "To use them as button icons, put this in BUTTON_ICONS (the emoji on the left is the one a button starts with):", "{" + sample + "}"]
+        await message.reply_text("\n".join(lines))
 
     async def text_input(self, update, context) -> None:
-        if not await self.guard.allow(update):
+        if not await self._allowed(update, context):
             return
         message = update.effective_message
         text = (message.text or "").strip()
