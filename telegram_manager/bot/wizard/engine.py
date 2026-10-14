@@ -9,10 +9,8 @@ import logging
 import math
 from typing import Any, Awaitable, Callable
 
-from telegram import InlineKeyboardButton as Btn
-from telegram import InlineKeyboardMarkup as Markup
-
 from telegram_manager.bot import keyboards, ui
+from telegram_manager.bot.keyboards import Btn, Markup
 from telegram_manager.bot.wizard.spec import Step, WizardAbort, WizardContext, WizardSpec
 from telegram_manager.bot.wizard.state import WizardState
 from telegram_manager.constants import PAGE_SIZE
@@ -94,7 +92,7 @@ class WizardEngine:
         await self._answer(wc, text)
         return True
 
-    async def on_photo(self, update, context, data: bytes) -> bool:
+    async def on_photo(self, update, context, data: bytes, file_id: str | None = None) -> bool:
         """Feed a received photo to the running flow. False if no flow is waiting for one."""
         state = self.active(context)
         if state is None or state.name not in self.specs or state.step is None:
@@ -104,17 +102,37 @@ class WizardEngine:
             return False
         state.touch()
         state.media = data
+        state.media_id = file_id
+        state.media_kind = "photo"
         await self._answer(wc, "photo")
+        return True
+
+    async def on_media(self, update, context, kind: str, file_id: str) -> bool:
+        """Feed a received GIF or video to the running flow. False if the current step does not take one."""
+        state = self.active(context)
+        if state is None or state.name not in self.specs or state.step is None:
+            return False
+        wc = self._wc(update, context, state)
+        step = self._step(wc)
+        if not (step.photo and step.media):
+            return False
+        state.touch()
+        state.media = b""  # nothing to download: the file id is enough to send it again
+        state.media_id = file_id
+        state.media_kind = kind
+        await self._answer(wc, kind)
         return True
 
     async def on_callback(self, update, context) -> None:
         """Buttons inside a flow: wz|<name>|pick|<value>, back, cancel, page|<n>."""
-        if not await self.deps.guard.allow(update):
-            return
         query = update.callback_query
-        await query.answer()
         parts = (query.data or "").split("|", 3)
         name = parts[1] if len(parts) > 1 else ""
+        spec = self.specs.get(name)
+        allowed = await (self.deps.guard.allow_public(update) if spec is not None and spec.public else self.deps.guard.allow(update))
+        if not allowed:
+            return
+        await query.answer()
         action = parts[2] if len(parts) > 2 else ""
         arg = parts[3] if len(parts) > 3 else ""
         state = self.active(context)
@@ -275,10 +293,10 @@ class WizardEngine:
             page = wc.state.page
             nav = []
             if page > 0:
-                nav.append(Btn("◀️ Prev", callback_data=f"wz|{name}|page|{page - 1}"))
+                nav.append(Btn("◀️ Prev", callback_data=f"wz|{name}|page|{page - 1}", style="primary"))
             nav.append(Btn(f"{page + 1}/{pages}", callback_data=f"wz|{name}|page|{page}"))
             if page < pages - 1:
-                nav.append(Btn("Next ▶️", callback_data=f"wz|{name}|page|{page + 1}"))
+                nav.append(Btn("Next ▶️", callback_data=f"wz|{name}|page|{page + 1}", style="primary"))
             rows.append(nav)
         if step.multi:
             rows.append([
