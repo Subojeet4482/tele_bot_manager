@@ -1,6 +1,7 @@
 """Pure text parsing for commands and wizard answers (no Telegram imports)."""
 from __future__ import annotations
 
+import base64
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -31,6 +32,21 @@ def mask_phone(phone: str) -> str:
     if len(digits) < 8:
         return "•" * (len(digits) - 2) + digits[-2:]
     return f"+{digits[:2]}{'•' * (len(digits) - 6)}{digits[-4:]}"
+
+
+def looks_like_telethon_session(value: str) -> bool:
+    """Rough shape check before spending a Telegram request on it: a Telethon StringSession is
+    base64 and reasonably long. This cannot prove the session is valid or even that it is a
+    Telethon session (only Telegram's own answer can) — it only catches obvious paste mistakes
+    (an API hash, a phone number, an empty string) so the auto-detect step can fail fast."""
+    value = (value or "").strip()
+    if len(value) < 50 or any(ch.isspace() for ch in value):
+        return False
+    try:
+        base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
+    except Exception:
+        return False
+    return True
 
 
 def parse_target(text: str) -> str:
