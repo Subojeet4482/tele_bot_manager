@@ -16,19 +16,24 @@ from telegram.ext import (
 )
 
 from telegram_manager.access import AccessControl
+from telegram_manager.bot import keyboards, reply_menu
 from telegram_manager.bot.bulk_runner import BulkRunner
 from telegram_manager.bot.deps import Deps
 from telegram_manager.bot.flows.admins import build_admin_specs
 from telegram_manager.bot.flows.bulk import build_bulk_specs
 from telegram_manager.bot.flows.connect import build_connect_specs
+from telegram_manager.bot.flows.export import build_export_specs
+from telegram_manager.bot.flows.give import build_give_spec
 from telegram_manager.bot.flows.message import build_message_spec
 from telegram_manager.bot.flows.multi import build_multi_spec
 from telegram_manager.bot.flows.profile import build_profile_specs
 from telegram_manager.bot.flows.schedule import build_schedule_spec
+from telegram_manager.bot.flows.startcfg import build_startcfg_specs
 from telegram_manager.bot.guard import Guard
 from telegram_manager.bot.handlers.accounts import AccountHandlers
 from telegram_manager.bot.handlers.admins import AdminHandlers
 from telegram_manager.bot.handlers.commands import CommandHandlers
+from telegram_manager.bot.handlers.control import ControlHandlers
 from telegram_manager.bot.handlers.forwarding import ForwardingHandlers
 from telegram_manager.bot.handlers.logs import LogsHandlers
 from telegram_manager.bot.handlers.schedule import ScheduleHandlers
@@ -65,9 +70,11 @@ class Components:
     commands: CommandHandlers
     schedule: ScheduleHandlers
     admins: AdminHandlers
+    control: ControlHandlers
     logs: LogsHandlers
     text: TextHandlers
     middleware: Middleware
+    menu: reply_menu.MenuButtons
 
 
 def wire(deps: Deps) -> Components:
@@ -81,6 +88,9 @@ def wire(deps: Deps) -> Components:
         *build_connect_specs(deps),
         build_schedule_spec(deps),
         *build_admin_specs(deps),
+        build_give_spec(deps),
+        *build_export_specs(deps),
+        *build_startcfg_specs(deps),
     )
     parts = Components(
         engine=engine,
@@ -90,10 +100,13 @@ def wire(deps: Deps) -> Components:
         commands=CommandHandlers(deps, engine),
         schedule=ScheduleHandlers(deps, engine),
         admins=AdminHandlers(deps, engine),
+        control=ControlHandlers(deps, engine),
         logs=LogsHandlers(deps, engine),
         text=TextHandlers(deps, engine),
         middleware=Middleware(deps, engine),
+        menu=None,
     )
+    parts.menu = reply_menu.MenuButtons(deps, engine, parts)
     # Where Back / Cancel lead from inside a flow.
     engine.screens = {
         "home": parts.start.home_screen,
@@ -101,6 +114,7 @@ def wire(deps: Deps) -> Components:
         "adm|home": parts.admins.home_screen,
         "acc_list": parts.accounts.list_screen,
         "sched|home": parts.schedule.home_screen,
+        "sc|home": parts.control.startcfg_screen,
     }
     return parts
 
@@ -125,6 +139,7 @@ def build_application(settings, log_buffer=None, log_access=None, health=None) -
         .build()
     )
     manager.bot = application.bot
+    keyboards.configure_icons(getattr(settings, "button_icons", None))
 
     access = AccessControl(store, settings.owner_id)
     deps = Deps(
@@ -148,6 +163,7 @@ def build_application(settings, log_buffer=None, log_access=None, health=None) -
     application.add_error_handler(parts.middleware.on_error)
     start, accounts, forwarding = parts.start, parts.accounts, parts.forwarding
     commands, schedule, admins, logs, text = parts.commands, parts.schedule, parts.admins, parts.logs, parts.text
+    control = parts.control
     engine = parts.engine
 
     for name, callback in (
@@ -169,6 +185,13 @@ def build_application(settings, log_buffer=None, log_access=None, health=None) -
         ("chanelmessage", _switch(forwarding, "c")),  # common misspelling
         ("delay", start.moved),
         ("onalltime", start.moved),
+        ("give", control.give_start),
+        ("export", control.export_command),
+        ("startscreen", control.startcfg_command),
+        ("help", control.help_command),
+        ("keyboard", start.keyboard),
+        ("hidekeyboard", start.hide_keyboard),
+        ("emojiid", start.emoji_id),
         ("logs", logs.logs),
     ):
         application.add_handler(CommandHandler(name, callback))
@@ -196,16 +219,31 @@ def build_application(settings, log_buffer=None, log_access=None, health=None) -
         (r"^sched\|home$", schedule.home),
         (r"^sched\|new$", schedule.new),
         (r"^sched\|off$", schedule.off),
+        (r"^sched\|view\|", schedule.view),
+        (r"^sched\|edit\|", schedule.edit),
+        (r"^sched\|del\|", schedule.delete),
         (r"^adm\|home$", admins.home),
         (r"^adm\|add$", admins.add),
         (r"^adm\|remove$", admins.remove),
         (r"^logs\|link$", logs.logs),
+        (r"^help$", start.help),
+        (r"^un\|", control.username_button),
+        (r"^exp\|", control.export_button),
+        (r"^give\|start$", control.give_start),
+        (r"^give\|acc\|", control.give_account),
+        (r"^sc\|preview$", start.preview),
+        (r"^sc\|", control.startcfg_button),
+        (r"^ex\|start$", control.public_export),
         (r"^wz\|", engine.on_callback),
     ):
         application.add_handler(CallbackQueryHandler(callback, pattern=pattern))
 
+    # The bottom menu's buttons arrive as plain text: catch them before the generic text handler.
+    application.add_handler(MessageHandler(filters.TEXT & filters.Regex(reply_menu.pattern()), parts.menu.press))
+    application.add_handler(MessageHandler(filters.TEXT & filters.Entity("custom_emoji"), text.custom_emoji_input))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text.text_input))
     application.add_handler(MessageHandler(filters.PHOTO | filters.Document.IMAGE, text.photo_input))
+    application.add_handler(MessageHandler(filters.ANIMATION | filters.VIDEO, text.media_input))
     application.add_handler(MessageReactionHandler(text.on_reaction))
     return application
 
