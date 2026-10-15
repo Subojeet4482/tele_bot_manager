@@ -25,6 +25,8 @@ from telegram import InlineKeyboardMarkup as Markup
 from telegram import KeyboardButton as _KeyButton
 from telegram import ReplyKeyboardMarkup as _ReplyMarkup
 
+from telegram_manager.parsing import format_clock
+
 # Telegram (Bot API 9.4+, Feb 2026) can colour buttons: primary = blue, success = green, danger = red,
 # and show a custom emoji in front of the text (`icon_custom_emoji_id`, needs the bot owner to have
 # Telegram Premium). This works on inline buttons AND on the bottom reply keyboard.
@@ -329,7 +331,7 @@ def no_accounts() -> Markup:
 def schedule_overview(manager, owner_id: int) -> Markup:
     """The daily-broadcast screen's buttons for this admin's current broadcasts."""
     jobs = [
-        (slot, f"{job.target} · {job.start_time.strftime('%I:%M %p').lstrip('0')}")
+        (slot, f"{job.target} · {format_clock(job.start_time)}")
         for slot, job in manager.daily_jobs_for(owner_id)
     ]
     return schedule_home(jobs, can_add=manager.free_daily_slot(owner_id) is not None)
