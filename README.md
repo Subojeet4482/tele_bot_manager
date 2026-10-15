@@ -197,7 +197,9 @@ When it ends, the same message turns into the result (with the reason for every 
 
 ### Daily broadcast: all or chosen accounts
 
-*Menu → Daily broadcast* (or `/broadcast`) asks: user → message → buttons to click (optional) → **which accounts** (tick them, or Select all) → delay → first time → runs per day. Ticking every account means "all accounts", so accounts you connect later are included automatically.
+*Menu → Daily broadcast* (or `/broadcast`) asks: user → message → buttons to click (optional) → **which accounts** (tick them, or Select all) → delay → first time → **daily shift** → runs per day. Ticking every account means "all accounts", so accounts you connect later are included automatically.
+
+**Daily shift (new).** After the first time the bot asks whether the time should move later every day. *Same time daily* keeps it fixed; or tap/type 1–9999999999999 seconds to add each day. The first time may include seconds (`6:42:30pm`). With a 30 sec shift and a first run at 6:42:30 PM you get 6:42:30 PM → 6:43 PM → 6:43:30 PM → … The time wraps inside the day, so the broadcast still goes out once a day (× runs per day).
 
 ### Timed messages
 
@@ -258,7 +260,7 @@ A trailing `Y`/`N` and a trailing `3sec` are read as options, so a message that 
 | `telegram_accounts` | auto id | Encrypted session and API hash, phone, `phone_masked`, forwarding overrides, owner, number |
 | `telegram_admins` | admin's Telegram ID | Who added them, when, name |
 | `telegram_admin_settings` | admin's Telegram ID | Global forwarding switches and the account counter |
-| `telegram_daily_jobs` | admin's Telegram ID | Daily broadcast: `target`, `text`, `delay_seconds`, `start_time`, `times_per_day`, `account_ids` (empty = all), `buttons` |
+| `telegram_daily_jobs` | admin's Telegram ID | Daily broadcast: `target`, `text`, `delay_seconds`, `start_time`, `times_per_day`, `account_ids` (empty = all), `buttons`, `drift_seconds`, `anchor_date` |
 | `telegram_reply_map` | `chatId_messageId` | Which forwarded message belongs to which original (for replies and reactions) |
 | `telegram_settings` | `instance_lease` | The lock that keeps one copy running |
 
@@ -301,7 +303,7 @@ Health uses a bot heartbeat (`get_me` every minute) and the connection watchdog.
 python -m unittest discover -s tests -v
 ```
 
-**169 tests, all passing.** They cover parsing, phone masking and lookup, config, the web server (health states, one-time login, cookies), Firestore isolation between admins, every wizard (bulk, message, connect with 2-step password and Back, daily broadcast, admin add/remove), access control, per-admin forwarding, user/bot/channel detection and bulk timing.
+**255 tests, all passing.** They cover parsing, phone masking and lookup, config, the web server (health states, one-time login, cookies), Firestore isolation between admins, every wizard (bulk, message, connect with 2-step password and Back, daily broadcast, admin add/remove), access control, per-admin forwarding, user/bot/channel detection and bulk timing.
 
 Without the Telegram/Telethon libraries installed, the tests use tiny stand-ins (`tests/stubs.py`); with them installed nothing is replaced.
 
