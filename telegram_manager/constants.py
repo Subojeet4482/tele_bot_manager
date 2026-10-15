@@ -22,6 +22,8 @@ MAX_TIMES_PER_DAY = 1440
 MAX_DAILY_JOBS = 10  # daily broadcasts one owner/admin can have at the same time
 COUNT_PRESETS = (1, 2, 3, 4, 6, 12)
 TIME_PRESETS = ("09:00", "12:00", "18:00", "21:00")
+DRIFT_MAX = 9_999_999_999_999  # seconds the start time may move later every day (0 = same time daily)
+DRIFT_PRESETS = (0, 10, 30, 60, 300)
 
 # --- bot UI ---------------------------------------------------------------------
 PAGE_SIZE = 8  # buttons per page in long lists (chats, accounts)
