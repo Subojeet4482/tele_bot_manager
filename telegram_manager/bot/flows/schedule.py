@@ -1,6 +1,8 @@
 """Daily broadcast, asked one question at a time (this is only reachable from the menu button)."""
 from __future__ import annotations
 
+from datetime import time as dtime
+
 from telegram_manager.bot import keyboards
 from telegram_manager.bot.flows.common import (
     accounts_step,
@@ -18,12 +20,14 @@ from telegram_manager.bot.wizard.spec import Choice, Step, WizardContext, Wizard
 from telegram_manager.constants import (
     BULK_DELAY_MAX,
     COUNT_PRESETS,
+    DRIFT_MAX,
+    DRIFT_PRESETS,
     OPEN_CHAT_DELAY_PRESETS,
     OPEN_CHAT_MIN_DELAY,
     TIME_PRESETS,
 )
 from telegram_manager.core.models import DailyJob
-from telegram_manager.parsing import parse_count, parse_time
+from telegram_manager.parsing import format_clock, parse_count, parse_drift, parse_time
 
 _DELAY_INTRO = (
     f"⏱ Delay between accounts ({OPEN_CHAT_MIN_DELAY}–{BULK_DELAY_MAX} sec)\n\n"
@@ -32,8 +36,10 @@ _DELAY_INTRO = (
 )
 
 
-def _clock(value) -> str:
-    return value.strftime("%I:%M %p").lstrip("0")
+def _shift(value, seconds: int):
+    """The clock time `seconds` later (wraps around midnight)."""
+    total = (value.hour * 3600 + value.minute * 60 + value.second + seconds) % 86400
+    return dtime(total // 3600, total % 3600 // 60, total % 60)
 
 
 def build_schedule_spec(deps) -> WizardSpec:
@@ -46,14 +52,31 @@ def build_schedule_spec(deps) -> WizardSpec:
     async def time_prompt(wc: WizardContext) -> str:
         return (
             f"🕐 At what time should the first broadcast go out? (timezone {tz})\n\n"
-            "Tap a time or type one, like 10:30am or 22:15."
+            "Tap a time or type one, like 10:30am, 22:15 or 6:42:30pm (seconds are allowed)."
         )
 
     async def time_choices(wc: WizardContext) -> list[Choice]:
-        return [Choice(_clock(parse_time(value)), value) for value in TIME_PRESETS]
+        return [Choice(format_clock(parse_time(value)), value) for value in TIME_PRESETS]
 
     async def parse_clock(wc: WizardContext, raw: str):
         return parse_time(raw)
+
+    async def drift_prompt(wc: WizardContext) -> str:
+        return (
+            "⏩ Should the time move later every day?\n\n"
+            "Tap \"Same time\" to send at the same time every day, or choose / type how many seconds "
+            f"to add each day (1–{DRIFT_MAX}).\n\n"
+            f"Example: first run {format_clock(wc.answers['time'])} with 30 sec →\n"
+            f"Day 1: {format_clock(wc.answers['time'])}\n"
+            f"Day 2: {format_clock(_shift(wc.answers['time'], 30))}\n"
+            f"Day 3: {format_clock(_shift(wc.answers['time'], 60))}"
+        )
+
+    async def drift_choices(wc: WizardContext) -> list[Choice]:
+        return [Choice("🔁 Same time daily" if n == 0 else f"+{n} sec", str(n)) for n in DRIFT_PRESETS]
+
+    async def parse_shift(wc: WizardContext, raw: str) -> int:
+        return parse_drift(raw)
 
     async def count_choices(wc: WizardContext) -> list[Choice]:
         return [Choice(f"{n}×", str(n)) for n in COUNT_PRESETS]
@@ -74,7 +97,8 @@ def build_schedule_spec(deps) -> WizardSpec:
             f"{buttons}"
             f"👥 From: {who}\n"
             f"⏱ {a['delay']} sec between accounts\n"
-            f"🕐 First run: {_clock(a['time'])} ({tz})\n"
+            f"🕐 First run: {format_clock(a['time'])} ({tz})\n"
+            f"⏩ {'+' + str(a['drift']) + ' sec later every day' if a['drift'] else 'Same time every day'}\n"
             f"🔁 Runs per day: {a['count']}"
         )
 
@@ -88,7 +112,7 @@ def build_schedule_spec(deps) -> WizardSpec:
         picked = None if await _covers_all(wc) else list(a["accounts"])
         job = DailyJob(
             a["target"], a["text"], a["delay"], a["time"], a["count"],
-            account_ids=picked, buttons=list(a.get("buttons") or []),
+            account_ids=picked, buttons=list(a.get("buttons") or []), drift_seconds=a.get("drift", 0),
         )
         try:
             slot = await manager.start_daily_job(wc.user_id, job, a.get("slot"))
@@ -119,6 +143,7 @@ def build_schedule_spec(deps) -> WizardSpec:
         ),
         delay_step(OPEN_CHAT_MIN_DELAY, OPEN_CHAT_DELAY_PRESETS, _DELAY_INTRO),
         Step("time", time_prompt, parse_clock, time_choices, columns=2),
+        Step("drift", drift_prompt, parse_shift, drift_choices, columns=3),
         Step(
             "count",
             static("🔁 How many times per day? Tap a number or type one."),
