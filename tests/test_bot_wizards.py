@@ -271,6 +271,8 @@ class ScheduleFlowTests(unittest.IsolatedAsyncioTestCase):
         u = await h.tap(OWNER, "wz|schedule|pick|5")
         self.assertIn("first broadcast", texts(u))
         u = await h.say(OWNER, "10:30am")
+        self.assertIn("move later every day", texts(u))
+        u = await h.tap(OWNER, "wz|schedule|pick|0")
         self.assertIn("times per day", texts(u))
         u = await h.tap(OWNER, "wz|schedule|pick|2")
         self.assertIn("Review", texts(u))
