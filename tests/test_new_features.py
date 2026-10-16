@@ -75,6 +75,7 @@ class MultiBroadcastTests(unittest.IsolatedAsyncioTestCase):
         await h.say(OWNER, "all")
         await h.tap(OWNER, "wz|schedule|pick|5")
         await h.say(OWNER, "10:30am")
+        await h.tap(OWNER, "wz|schedule|pick|0")  # same time every day
         await h.tap(OWNER, "wz|schedule|pick|1")
         return await h.tap(OWNER, "wz|schedule|pick|yes")
 
@@ -101,6 +102,7 @@ class MultiBroadcastTests(unittest.IsolatedAsyncioTestCase):
         await h.say(OWNER, "all")
         await h.tap(OWNER, "wz|schedule|pick|5")
         await h.say(OWNER, "10:30am")
+        await h.tap(OWNER, "wz|schedule|pick|0")  # same time every day
         await h.tap(OWNER, "wz|schedule|pick|1")
         u = await h.tap(OWNER, "wz|schedule|pick|yes")
         self.assertIn("#2 scheduled", texts(u))
