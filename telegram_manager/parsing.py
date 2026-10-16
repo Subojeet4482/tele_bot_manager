@@ -11,6 +11,7 @@ from telegram_manager.constants import (
     AUTOCLICK_MAX_BUTTONS,
     BULK_DELAY_MAX,
     BULK_DELAY_MIN,
+    DRIFT_MAX,
     MAX_TIMES_PER_DAY,
     WHEN_MAX_MINUTES,
 )
@@ -92,12 +93,28 @@ def parse_minutes(text: str, maximum: int = WHEN_MAX_MINUTES) -> int:
 
 def parse_time(text: str) -> dtime:
     cleaned = (text or "").strip().replace(" ", "").upper()
-    for fmt in ("%I:%M%p", "%I%p", "%H:%M"):
+    for fmt in ("%I:%M%p", "%I%p", "%H:%M", "%I:%M:%S%p", "%H:%M:%S"):
         try:
             return datetime.strptime(cleaned, fmt).time()
         except ValueError:
             continue
-    raise ValueError("Use a time like 10:30am or 22:15.")
+    raise ValueError("Use a time like 10:30am, 22:15 or 6:42:30pm.")
+
+
+def format_clock(value: dtime) -> str:
+    """6:42 PM, or 6:42:30 PM when the start time has seconds."""
+    return value.strftime("%I:%M:%S %p" if value.second else "%I:%M %p").lstrip("0")
+
+
+def parse_drift(text: str, maximum: int = DRIFT_MAX) -> int:
+    """Seconds the daily start time moves later every day: "0" (same time), "30", "30s", "90 sec"."""
+    match = re.fullmatch(r"\s*(\d{1,13})\s*(?:s|sec|secs|seconds?)?\s*", text or "", re.I)
+    if not match:
+        raise ValueError(f"Send a whole number of seconds from 0 to {maximum}, for example 30.")
+    value = int(match.group(1))
+    if value > maximum:
+        raise ValueError(f"The most is {maximum} seconds.")
+    return value
 
 
 def parse_count(text: str, maximum: int = MAX_TIMES_PER_DAY) -> int:
