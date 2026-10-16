@@ -261,6 +261,7 @@ class MultiBroadcastTests(unittest.IsolatedAsyncioTestCase):
             await h.tap(OWNER, "wz|schedule|done")
             await h.tap(OWNER, "wz|schedule|pick|5")
             await h.say(OWNER, "10:30am")
+            await h.tap(OWNER, "wz|schedule|pick|0")  # same time every day
             u = await h.tap(OWNER, "wz|schedule|pick|2")
             self.assertIn("2 chosen account(s)", texts(u))
             self.assertIn("Click: join", texts(u))
@@ -284,6 +285,7 @@ class MultiBroadcastTests(unittest.IsolatedAsyncioTestCase):
             await h.tap(OWNER, "wz|schedule|done")
             await h.tap(OWNER, "wz|schedule|pick|5")
             await h.say(OWNER, "10:30am")
+            await h.tap(OWNER, "wz|schedule|pick|0")  # same time every day
             await h.tap(OWNER, "wz|schedule|pick|1")
             return await h.tap(OWNER, "wz|schedule|pick|yes")
 
