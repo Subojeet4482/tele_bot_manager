@@ -41,27 +41,33 @@ class DailyJob:
     times_per_day: int
     account_ids: list[str] | None = None  # None = every connected account (also ones added later)
     buttons: list[str] = field(default_factory=list)  # inline buttons to press after the message
+    drift_seconds: int = 0  # the start time moves this many seconds later every day (0 = same time daily)
+    anchor_date: str | None = None  # ISO date of the first day (day 0) — set when the job starts
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "target": self.target,
             "text": self.text,
             "delay_seconds": self.delay_seconds,
-            "start_time": self.start_time.strftime("%H:%M"),
+            "start_time": self.start_time.strftime("%H:%M:%S" if self.start_time.second else "%H:%M"),
             "times_per_day": self.times_per_day,
             "account_ids": None if self.account_ids is None else [str(item) for item in self.account_ids],
             "buttons": list(self.buttons),
+            "drift_seconds": int(self.drift_seconds),
+            "anchor_date": self.anchor_date,
         }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "DailyJob":
-        hour, minute = str(data["start_time"]).split(":")
+        hour, minute, *rest = str(data["start_time"]).split(":")
         return cls(
             target=str(data["target"]),
             text=str(data["text"]),
             delay_seconds=int(data["delay_seconds"]),
-            start_time=dtime(int(hour), int(minute)),
+            start_time=dtime(int(hour), int(minute), int(rest[0]) if rest else 0),
             times_per_day=int(data["times_per_day"]),
             account_ids=None if data.get("account_ids") is None else [str(item) for item in data["account_ids"]],
             buttons=[str(item) for item in data.get("buttons") or []],
+            drift_seconds=int(data.get("drift_seconds") or 0),
+            anchor_date=data.get("anchor_date") or None,
         )
