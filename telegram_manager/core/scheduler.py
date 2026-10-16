@@ -4,11 +4,18 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from datetime import time as dtime
 
-from telegram_manager.constants import BULK_DELAY_MAX, MAX_DAILY_JOBS, MAX_TIMES_PER_DAY, OPEN_CHAT_MIN_DELAY
+from telegram_manager.constants import (
+    BULK_DELAY_MAX,
+    DRIFT_MAX,
+    MAX_DAILY_JOBS,
+    MAX_TIMES_PER_DAY,
+    OPEN_CHAT_MIN_DELAY,
+)
 from telegram_manager.core.models import DailyJob
+from telegram_manager.parsing import format_clock
 
 logger = logging.getLogger(__name__)
 
@@ -32,13 +39,15 @@ class SchedulerMixin:
     def _describe_job(self, job: DailyJob) -> str:
         accounts = "all accounts" if job.account_ids is None else f"{len(job.account_ids)} chosen account(s)"
         buttons = f"Buttons to click: {' → '.join(job.buttons)}\n" if job.buttons else ""
+        drift = f"+{job.drift_seconds} sec later every day" if job.drift_seconds else "same time every day"
         return (
             f"Target: {job.target}\n"
             f"Message: {job.text}\n"
             f"{buttons}"
             f"Accounts: {accounts}\n"
             f"Delay between accounts: {job.delay_seconds}s\n"
-            f"Starts daily at: {job.start_time.strftime('%I:%M %p').lstrip('0')} ({self.tz.key})\n"
+            f"Starts daily at: {format_clock(job.start_time)} ({self.tz.key})\n"
+            f"Daily shift: {drift}\n"
             f"Times per day: {job.times_per_day}"
         )
 
@@ -68,6 +77,8 @@ class SchedulerMixin:
             raise ValueError("Unknown broadcast number")
         job.delay_seconds = max(OPEN_CHAT_MIN_DELAY, min(int(job.delay_seconds), BULK_DELAY_MAX))
         job.times_per_day = max(1, min(int(job.times_per_day), MAX_TIMES_PER_DAY))
+        job.drift_seconds = max(0, min(int(job.drift_seconds), DRIFT_MAX))
+        job.anchor_date = self._anchor_for(job) if job.drift_seconds else None  # day 0 = the first real run
         # Save first: if Firestore fails, the job that is already running is left alone.
         await self.store.jobs.save(owner_id, job.to_dict(), slot)
         self._run_daily_job(owner_id, slot, job)
@@ -103,7 +114,10 @@ class SchedulerMixin:
             return
         for owner_id, slot, data in rows:
             try:
-                self._run_daily_job(owner_id, slot, DailyJob.from_dict(data))
+                job = DailyJob.from_dict(data)
+                if job.drift_seconds and not job.anchor_date:
+                    job.anchor_date = datetime.now(self.tz).date().isoformat()
+                self._run_daily_job(owner_id, slot, job)
                 logger.info("Restored a daily job from Firestore")
             except Exception:
                 logger.exception("Could not restore one daily job")
@@ -122,16 +136,29 @@ class SchedulerMixin:
         for key in list(self._daily):
             self._cancel_daily(key)
 
+    def _anchor_for(self, job: DailyJob) -> str:
+        """Day 0 of the drift = the day of the first real run: today if a run is still ahead today, else tomorrow."""
+        now = datetime.now(self.tz)
+        job.anchor_date = now.date().isoformat()
+        first = self._next_run(job, now)
+        return (now.date() if first.date() == now.date() else now.date() + timedelta(days=1)).isoformat()
+
     def _next_run(self, job: DailyJob, now: datetime) -> datetime:
-        """Next scheduled slot after `now`. Slots start at job.start_time and are spaced
-        24h / times_per_day apart (wall-clock in the configured timezone)."""
+        """Next scheduled run after `now`. A day's runs start at job.start_time, plus drift_seconds for every
+        day since the first one, and are spaced 24h / times_per_day apart. Times wrap inside the calendar day,
+        so the broadcast still goes out once per day (times_per_day times) however large the drift grows."""
         step = 86400 / job.times_per_day
-        base = job.start_time.hour * 3600 + job.start_time.minute * 60
+        base = job.start_time.hour * 3600 + job.start_time.minute * 60 + job.start_time.second
+        anchor = date.fromisoformat(job.anchor_date) if job.anchor_date else None
         candidates = []
         for day_offset in (-1, 0, 1):
-            midnight = datetime.combine(now.date() + timedelta(days=day_offset), dtime(0, 0), tzinfo=self.tz)
+            day = now.date() + timedelta(days=day_offset)
+            days_since = max(0, (day - anchor).days) if anchor else 0
+            start = base + days_since * job.drift_seconds
+            midnight = datetime.combine(day, dtime(0, 0), tzinfo=self.tz)
             for slot in range(job.times_per_day):
-                candidates.append(midnight + timedelta(seconds=base + slot * step))
+                offset = (start + slot * step) % 86400 if (job.drift_seconds or anchor) else base + slot * step
+                candidates.append(midnight + timedelta(seconds=offset))
         return min(c for c in candidates if c.timestamp() > now.timestamp())
 
     async def _broadcast(self, owner_id: int, job: DailyJob):
