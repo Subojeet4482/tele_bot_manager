@@ -28,7 +28,9 @@
 - **Account profile.** Change an account's name, bio and profile photo from the bot.
 - **Daily broadcast.** Schedule a message to go out at set times from **all accounts or only the ones you tick** (multi broadcast).
 - **Auto-click buttons.** `/all @bot hello [follow] (join)` presses the bot's inline buttons by name, and joins the channel behind a link button.
-- **Refresh.** 🔄 Refresh on the accounts list re-reads every account's name from Telegram; accounts are always shown in number order.
+- **Refresh.** 🔄 Refresh on the accounts list re-reads every account's name from Telegram and tidies the numbers (5, 6, 7, 8 → 1, 2, 3, 4); accounts are always shown in number order.
+- **Arrange order.** ↕️ Arrange order (or ⬆️ ⬇️ on an account's screen) moves an account up, down or to number 1.
+- **Devices.** 📲 Devices on an account's screen lists every login of that account (device, app, country, last active) and lets you end one device or all other devices. The login the bot itself uses is kept.
 - **Multi-admin.** The owner adds admins; every admin sees and controls only their own accounts.
 - **Give accounts away.** The owner gives chosen (or all) accounts to an admin; an admin gives accounts to the owner. Open `🎁 Give accounts`, or the button on an account's screen.
 - **Full account control.** Tap an account: see its number, add / change / remove its @username, change name, photo and bio, export its session, give it away or log it out.
