@@ -5,6 +5,7 @@ from telegram_manager.core.accountctl import AccountControlMixin
 from telegram_manager.core.accounts import AccountsMixin
 from telegram_manager.core.autoclick import AutoClickMixin
 from telegram_manager.core.base import ManagerBase
+from telegram_manager.core.devices import DevicesMixin
 from telegram_manager.core.dialogs import DialogsMixin
 from telegram_manager.core.forwarding import ForwardingMixin
 from telegram_manager.core.lease import LeaseMixin
@@ -27,6 +28,7 @@ class TelethonManager(
     ExportLoginMixin,
     AccountsMixin,
     AccountControlMixin,
+    DevicesMixin,
     DialogsMixin,
     MessagingMixin,
     AutoClickMixin,
