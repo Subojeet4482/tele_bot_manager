@@ -146,6 +146,7 @@ class Harness:
             "loc": p.accounts.logout_confirm, "acc": p.forwarding.account_screen, "bulk": p.commands.bulk_button,
             "msg_acc": p.commands.message_for_account, "stop_bulk": p.commands.stop_bulk, "logs": p.logs.logs,
             "wz": p.engine.on_callback, "pf": p.accounts.profile_button,
+            "mv": p.accounts.move_button, "dv": p.control.device_button,
             "un": p.control.username_button, "exp": p.control.export_button, "help": p.start.help,
             "expr": p.control.revoke_export_button,
         }
