@@ -106,6 +106,7 @@ def wire(deps: Deps) -> Components:
         middleware=Middleware(deps, engine),
         menu=None,
     )
+    parts.accounts.forwarding = parts.forwarding
     parts.menu = reply_menu.MenuButtons(deps, engine, parts)
     # Where Back / Cancel lead from inside a flow.
     engine.screens = {
@@ -208,6 +209,8 @@ def build_application(settings, log_buffer=None, log_access=None, health=None) -
         (r"^loc\|", accounts.logout_confirm),
         (r"^acc\|", forwarding.account_screen),
         (r"^pf\|", accounts.profile_button),
+        (r"^mv\|", accounts.move_button),
+        (r"^dv\|", control.device_button),
         (r"^fw\|home$", forwarding.home),
         (r"^fw\|g\|", forwarding.toggle_global),
         (r"^fw\|accs$", forwarding.account_picker),
