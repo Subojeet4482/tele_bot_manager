@@ -63,7 +63,7 @@ class ForwardingHandlers(HandlerBase):
         if account is not None:
             await self._screen(update, account)
 
-    async def _screen(self, update, account: dict) -> None:
+    async def _screen(self, update, account: dict, footer: str = "") -> None:
         forwarding = await self.store.settings.get_forwarding(self.uid(update))
         labels = {}
         for key, (title, name) in SWITCHES.items():
@@ -80,7 +80,8 @@ class ForwardingHandlers(HandlerBase):
             + (f"🔤 @{account['username']}\n" if account.get("username") else "🔤 No username\n")
             + "\n"
             "Tap a switch to change it. It cycles: default → ON → OFF → default.\n"
-            "“Default” follows your setting in Menu → Forwarding.",
+            "“Default” follows your setting in Menu → Forwarding."
+            + (f"\n\n{footer}" if footer else ""),
             keyboards.account_screen(str(account["id"]), labels, has_username=bool(account.get("username"))),
         )
 
