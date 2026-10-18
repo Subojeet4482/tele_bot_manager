@@ -32,6 +32,74 @@ class ControlHandlers(HandlerBase):
             return
         await ui.show(update, "✅ Username removed.", back)
 
+    # --- devices (logins) of an account: dv|list|<id>, dv|end|<id>|<hash>, dv|all|<id>, dv|allc|<id> ---
+    def _device_text(self, account: dict, devices: list[dict], footer: str = "") -> str:
+        lines = [f"📲 Devices of {account.get('number')}. {self.manager.label_for_account(account)}", ""]
+        for number, device in enumerate(devices, start=1):
+            title = f"{number}. {device['device']}"
+            if device["platform"]:
+                title += f" · {device['platform']} {device['system']}".rstrip()
+            lines.append(("🤖 " if device["current"] else "📱 ") + title + ("  (this bot — keeps the account online)" if device["current"] else ""))
+            where = " · ".join(part for part in (device["country"], device["region"], device["ip"]) if part)
+            if device["app"] or where:
+                lines.append("    " + " · ".join(part for part in (device["app"], where) if part))
+            if device["active"]:
+                lines.append(f"    last active {device['active'].astimezone(self.manager.tz).strftime('%d %b, %H:%M')}")
+        others = sum(1 for device in devices if not device["current"])
+        lines += ["", f"{others} other device(s) logged in." if others else "No other device is logged in. ✅"]
+        lines.append("Tap ❌ to log a device out. Anything you do not recognise: end it.")
+        if footer:
+            lines += ["", footer]
+        return "\n".join(lines)
+
+    async def _show_devices(self, update, account: dict, footer: str = "") -> None:
+        back = keyboards.back(f"acc|{account['id']}", "⬅️ Back to account")
+        try:
+            devices = await self.manager.list_devices(str(account["id"]), self.uid(update))
+        except Exception as exc:
+            await ui.show(update, f"❌ Could not read the devices: {describe_error(exc)}", back)
+            return
+        await ui.show(update, self._device_text(account, devices, footer), keyboards.devices_list(str(account["id"]), devices))
+
+    async def device_button(self, update, context) -> None:
+        if not await self.entry(update):
+            return
+        action, _, rest = self.arg(update).partition("|")
+        account_id, _, extra = rest.partition("|")
+        account = await self.own_account(update, account_id)
+        if account is None or action not in ("list", "end", "all", "allc"):
+            return
+        if not self.manager.is_online(str(account["id"])):
+            await ui.show(
+                update,
+                "🔴 This account is offline right now, so its devices cannot be read.",
+                keyboards.back(f"acc|{account_id}", "⬅️ Back to account"),
+            )
+            return
+        if action == "list":
+            await self._show_devices(update, account)
+        elif action == "all":
+            await ui.show(
+                update,
+                "🧹 End all other devices?\n\nEvery login of this account except the one this bot uses is "
+                "logged out (phones, desktops, other bots). They will need the login code again.",
+                keyboards.devices_end_all_confirm(account_id),
+            )
+        elif action == "end":
+            try:
+                await self.manager.end_device(account_id, self.uid(update), int(extra))
+            except Exception as exc:
+                await self._show_devices(update, account, f"❌ Could not end it: {describe_error(exc)}")
+                return
+            await self._show_devices(update, account, "✅ That device was logged out.")
+        else:
+            try:
+                count = await self.manager.end_other_devices(account_id, self.uid(update))
+            except Exception as exc:
+                await self._show_devices(update, account, f"❌ Could not end them: {describe_error(exc)}")
+                return
+            await self._show_devices(update, account, f"✅ {count} other device(s) logged out.")
+
     # --- export a session of an own account: exp|pick, exp|ask|<id>, exp|go|<id>, exp|multi -----
     async def export_button(self, update, context) -> None:
         if not await self.entry(update):
