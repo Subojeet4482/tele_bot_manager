@@ -26,7 +26,7 @@ class Settings:
     port: int
     self_ping_url: str | None
     self_ping_interval: int
-    timezone: str = "UTC"
+    timezone: str = "Asia/Kolkata"
     bot_user_id: int = 0
     public_url: str | None = None
     instance_lease: bool = True
@@ -110,7 +110,7 @@ class Settings:
             raise RuntimeError("INSTANCE_LEASE must be on or off")
         instance_lease = lease_value in ("on", "1", "true", "yes")
 
-        timezone_name = os.getenv("TIMEZONE", "").strip() or "UTC"
+        timezone_name = os.getenv("TIMEZONE", "").strip() or "Asia/Kolkata"
         try:
             ZoneInfo(timezone_name)
         except (ZoneInfoNotFoundError, ValueError) as exc:
