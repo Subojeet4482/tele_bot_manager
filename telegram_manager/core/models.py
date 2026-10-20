@@ -43,6 +43,21 @@ class DailyJob:
     buttons: list[str] = field(default_factory=list)  # inline buttons to press after the message
     drift_seconds: int = 0  # the start time moves this many seconds later every day (0 = same time daily)
     anchor_date: str | None = None  # ISO date of the first day (day 0) — set when the job starts
+    drift_max_seconds: int = 0  # > drift_seconds: the daily shift is a random value in [drift_seconds, drift_max_seconds]
+
+    def shift_total(self, days_since: int) -> int:
+        """Total seconds the start time has moved after `days_since` days. A fixed shift is simple
+        multiplication; a random one is the sum of one stable random value per day (the same days
+        always give the same answer, so a restart never changes today's time)."""
+        if days_since <= 0:
+            return 0
+        low, high = int(self.drift_seconds), max(int(self.drift_seconds), int(self.drift_max_seconds or 0))
+        if high == low:
+            return low * days_since
+        import random
+
+        seed = f"{self.anchor_date}|{self.target}|{self.start_time.isoformat()}"
+        return sum(random.Random(f"{seed}|{day}").randint(low, high) for day in range(1, days_since + 1))
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -55,6 +70,7 @@ class DailyJob:
             "buttons": list(self.buttons),
             "drift_seconds": int(self.drift_seconds),
             "anchor_date": self.anchor_date,
+            "drift_max_seconds": int(self.drift_max_seconds),
         }
 
     @classmethod
@@ -70,4 +86,5 @@ class DailyJob:
             buttons=[str(item) for item in data.get("buttons") or []],
             drift_seconds=int(data.get("drift_seconds") or 0),
             anchor_date=data.get("anchor_date") or None,
+            drift_max_seconds=int(data.get("drift_max_seconds") or 0),
         )
