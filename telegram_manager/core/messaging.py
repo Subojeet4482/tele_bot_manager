@@ -25,22 +25,24 @@ def _with_buttons(buttons: list[str] | None) -> dict:
 
 class MessagingMixin:
     # --- one account -----------------------------------------------------------------
-    async def _deliver(self, client, entity, text: str, buttons: list[str] | None) -> list[str]:
-        """Send the message (if any), then press the named buttons of the bot's reply."""
+    async def _deliver(self, client, entity, text: str, buttons: list[str] | None) -> int:
+        """Send the message (if any), then press the named buttons of the bot's reply.
+        Returns the id of the message that was sent (0 when only buttons were pressed)."""
         after_id = 0
         if text:
             sent = await client.send_message(entity, text, parse_mode=None)
             after_id = int(getattr(sent, "id", 0) or 0)
-        if not buttons:
-            return []
-        return await self.click_buttons(client, entity, buttons, after_id)
+        if buttons:
+            await self.click_buttons(client, entity, buttons, after_id)
+        return after_id
 
     async def send_to_existing_dialog(
         self, account_id: str, target: str, text: str, owner_id: int | None = None, buttons: list[str] | None = None
     ) -> None:
         client = self._client_for(account_id, owner_id)
         entity = await self._existing_entity(account_id, client, target)
-        await self._deliver(client, entity, text, buttons)
+        sent_id = await self._deliver(client, entity, text, buttons)
+        self._remember_sent(account_id, target, sent_id, owner_id)
         logger.info("Sent message via account %s to %s (existing chat)", account_id, mask_id(target))
 
     async def send_to_any(
@@ -48,7 +50,8 @@ class MessagingMixin:
     ) -> None:
         client = self._client_for(account_id, owner_id)
         entity = await self._resolve_any_entity(client, target)
-        await self._deliver(client, entity, text, buttons)
+        sent_id = await self._deliver(client, entity, text, buttons)
+        self._remember_sent(account_id, target, sent_id, owner_id)
         logger.info("Sent message via account %s to %s (chat opened if needed)", account_id, mask_id(target))
 
     async def block_on_account(self, account_id: str, target: str, owner_id: int | None = None) -> None:
