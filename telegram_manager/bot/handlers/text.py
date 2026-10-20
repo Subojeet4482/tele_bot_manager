@@ -90,7 +90,11 @@ class TextHandlers(HandlerBase):
         if await self.engine.on_text(update, context, text):
             return
         replied = message.reply_to_message
-        if replied is not None:
+        ai = getattr(self, "ai", None)  # set by the registry
+        if ai is not None and await ai.pre_route(update, context, text):
+            return  # a settings answer, or a key/API hash typed into the chat (kept away from the AI)
+        force_ai = ai is not None and ai.has_prefix(text)  # "ai ..." on a forwarded message asks the AI instead of replying
+        if replied is not None and not force_ai:
             try:
                 handled = await self.manager.reply_via_forward(
                     self.uid(update), update.effective_chat.id, replied.message_id, text
@@ -102,7 +106,10 @@ class TextHandlers(HandlerBase):
             if handled:
                 await message.reply_text("✅ Reply sent to that chat.")
                 return
-        await message.reply_text("Use /start or /menu to open the account manager.")
+        if ai is not None and await ai.ask(update, context, text, replied):
+            return
+        hint = "\n🤖 AI se kaam karwane ke liye /aisettings mein Gemini key jodo." if ai is not None else ""
+        await message.reply_text("Use /start or /menu to open the account manager." + hint)
 
     async def on_reaction(self, update, context) -> None:
         reaction_update = update.message_reaction
