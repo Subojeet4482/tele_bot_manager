@@ -99,9 +99,7 @@ def install() -> None:
     _module("telethon.tl.functions.contacts", BlockRequest=_Any)
     _module("telethon.tl.functions.messages", SendReactionRequest=_Any, ImportChatInviteRequest=_Any)
     _module("telethon.tl.functions.channels", JoinChannelRequest=_Any)
-    _module("telethon.tl.functions.account", UpdateProfileRequest=_Any, UpdateUsernameRequest=_Any,
-            GetAuthorizationsRequest=_Any, ResetAuthorizationRequest=_Any)
-    _module("telethon.tl.functions.auth", ResetAuthorizationsRequest=_Any)
+    _module("telethon.tl.functions.account", UpdateProfileRequest=_Any, UpdateUsernameRequest=_Any)
     _module("telethon.tl.functions.photos", UploadProfilePhotoRequest=_Any)
     _module("telethon.tl.types", ReactionEmoji=_Any, Channel=type("Channel", (), {}))
 
