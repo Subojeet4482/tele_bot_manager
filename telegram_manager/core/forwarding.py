@@ -69,6 +69,12 @@ class ForwardingMixin:
         )
         if forward:
             await self.forward_event(account, event)
+        hook = getattr(self, "incoming_hook", None)  # the AI's private chats
+        if hook is not None and getattr(event, "is_private", False):
+            try:
+                await hook(account, event)
+            except Exception:
+                logger.exception("The AI chat hook failed for account %s", account_id)
 
     async def _should_forward(self, account: dict[str, Any], event: events.NewMessage.Event) -> tuple[bool, str]:
         global_settings = await self.store.settings.get_forwarding(self._owner_of(account))
