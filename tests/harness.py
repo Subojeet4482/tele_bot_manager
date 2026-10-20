@@ -40,6 +40,18 @@ def patch_sleep(case, on_sleep) -> None:
     case.addCleanup(patcher.stop)
 
 
+def _fake_get_file(data: bytes):
+    async def get_file():
+        return SimpleNamespace(download_as_bytearray=_async_value(bytearray(data)))
+    return get_file
+
+
+def _async_value(value):
+    async def inner():
+        return value
+    return inner
+
+
 class FakeClient:
     def __init__(self):
         self.connected = True
@@ -118,6 +130,9 @@ class Harness:
             "give": p.control.give_start, "export": p.control.export_command, "startscreen": p.control.startcfg_command,
             "help": p.control.help_command, "keyboard": p.start.keyboard, "hidekeyboard": p.start.hide_keyboard,
             "emojiid": p.start.emoji_id,
+            "setapi": p.extras.setapi, "send": p.extras.send_command, "unsend": p.extras.unsend,
+            "delchat": p.extras.delchat, "whois": p.extras.whois, "import": p.extras.import_command,
+            "ai": p.ai.ai_command, "aisettings": p.ai.settings_command, "aichats": p.ai.chats_command, "aiclear": p.ai.clear_command,
         }
         for kind in ("all", "alll", "allblock", "click"):
             handlers[kind] = self._bulk_handler("block" if kind == "allblock" else kind)
@@ -146,9 +161,9 @@ class Harness:
             "loc": p.accounts.logout_confirm, "acc": p.forwarding.account_screen, "bulk": p.commands.bulk_button,
             "msg_acc": p.commands.message_for_account, "stop_bulk": p.commands.stop_bulk, "logs": p.logs.logs,
             "wz": p.engine.on_callback, "pf": p.accounts.profile_button,
-            "mv": p.accounts.move_button, "dv": p.control.device_button,
             "un": p.control.username_button, "exp": p.control.export_button, "help": p.start.help,
-            "expr": p.control.revoke_export_button,
+            "expr": p.control.revoke_export_button, "unsend": p.extras.unsend_button, "delchat": p.extras.delchat_button,
+            "ai": p.ai.settings_button, "aia": p.ai.approval_button, "aib": p.ai.broadcast_button, "aic": p.ai.chat_button,
         }
         special = {
             "fw|home": p.forwarding.home, "fw|accs": p.forwarding.account_picker, "msg|start": p.commands.message_button,
@@ -184,6 +199,14 @@ class Harness:
 
     async def send_media(self, user_id: int, kind: str, file_id: str) -> FakeUpdate:
         return await self._run(user_id, FakeUpdate(user_id, text=None).with_media(kind, file_id), self.parts.text.media_input)
+
+    async def send_txt(self, user_id: int, content: str) -> FakeUpdate:
+        """An admin sends a .txt file."""
+        update = FakeUpdate(user_id, text=None)
+        data = content.encode("utf-8")
+        update.effective_message.document = SimpleNamespace(
+            file_size=len(data), get_file=_fake_get_file(data), file_name="sessions.txt")
+        return await self._run(user_id, update, self.parts.extras.txt_input)
 
     async def press(self, user_id: int, label: str) -> FakeUpdate:
         """Tap a button of the bottom menu (it arrives as a text message)."""
