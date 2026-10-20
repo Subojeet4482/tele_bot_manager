@@ -274,7 +274,7 @@ def build_application(settings, log_buffer=None, log_access=None, health=None) -
     application.add_handler(MessageHandler(filters.TEXT & filters.Entity("custom_emoji"), text.custom_emoji_input))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text.text_input))
     application.add_handler(MessageHandler(filters.PHOTO | filters.Document.IMAGE, text.photo_input))
-    application.add_handler(MessageHandler(filters.Document.FILE_EXTENSION("txt"), extras.txt_input))
+    application.add_handler(MessageHandler(filters.Document.ALL, extras.txt_input))
     application.add_handler(MessageHandler(filters.ANIMATION | filters.VIDEO, text.media_input))
     application.add_handler(MessageReactionHandler(text.on_reaction))
     return application
