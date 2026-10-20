@@ -3,8 +3,6 @@
 home / menu            main screens
 connect, cx|otp|session  connecting an account
 acc_list, acc_refresh, acc|<id>   accounts list, refresh names, one account's screen
-mv|home, mv|up|down|top|<id>|<a|l>   arrange the order of accounts
-dv|list|end|all|allc|<id>   devices (logins) of an account: list, end one, end all others
 logout, lo|<id>, loc|<id>   logout picker / confirm / do it
 fw|...                 forwarding switches
 bulk|<kind>, msg|start, msg_acc|<id>, pf|name|photo|bio|<id>   start a wizard from a button
@@ -158,6 +156,7 @@ def help_keyboard(is_owner: bool) -> Markup:
         [Btn("🎁 /give", callback_data="give|start"), Btn("📤 /export", callback_data="exp|pick")],
         [Btn("📦 Export multiple", callback_data="exp|multi")],
         [Btn("🎨 /startscreen", callback_data="sc|home"), Btn("🔗 Connect", callback_data="connect")],
+        [Btn("🤖 /aisettings", callback_data="ai|home")],
     ]
     if is_owner:
         rows.append([Btn("👑 Admins", callback_data="adm|home"), Btn("📜 /logs", callback_data="logs|link")])
@@ -178,6 +177,7 @@ def menu_keyboard(is_owner: bool) -> Markup:
         [Btn("🎁 Give accounts", callback_data="give|start"), Btn("📤 Export session", callback_data="exp|pick")],
         [Btn("📦 Export multiple (.txt)", callback_data="exp|multi")],
         [Btn("🎨 Start screen", callback_data="sc|home"), Btn("📖 All commands", callback_data="help")],
+        [Btn("🤖 AI manager", callback_data="ai|home")],
     ]
     if is_owner:
         rows.append([Btn("📜 Live logs", callback_data="logs|link")])
@@ -214,25 +214,9 @@ def accounts_list(accounts: list[dict], online) -> Markup:
              f"{'🟢' if online(str(a['id'])) else '🔴'}", callback_data=f"acc|{a['id']}")]
         for a in accounts
     ]
-    rows.append([Btn("🔄 Refresh", callback_data="acc_refresh"), Btn("↕️ Arrange order", callback_data="mv|home")])
-    rows.append([Btn("🔗 Connect account", callback_data="connect"), Btn("🎁 Give accounts", callback_data="give|start")])
-    rows.append([Btn("📦 Export multiple", callback_data="exp|multi")])
+    rows.append([Btn("🔄 Refresh", callback_data="acc_refresh"), Btn("🔗 Connect account", callback_data="connect")])
+    rows.append([Btn("🎁 Give accounts", callback_data="give|start"), Btn("📦 Export multiple", callback_data="exp|multi")])
     rows.append([Btn("⬅️ Back", callback_data="home")])
-    return _markup(rows)
-
-
-def arrange_list(accounts: list[dict]) -> Markup:
-    """One row per account: its place, then ⬆️ ⬇️ and 🔝 (make it number 1)."""
-    rows = []
-    last = len(accounts) - 1
-    for index, a in enumerate(accounts):
-        name = str(a.get("display_name") or "Unnamed")[:14]
-        row = [Btn(f"{a.get('number')}. {name}", callback_data=f"acc|{a['id']}")]
-        row.append(Btn("⬆️", callback_data=f"mv|up|{a['id']}|l") if index > 0 else Btn("·", callback_data="mv|home"))
-        row.append(Btn("⬇️", callback_data=f"mv|down|{a['id']}|l") if index < last else Btn("·", callback_data="mv|home"))
-        row.append(Btn("🔝", callback_data=f"mv|top|{a['id']}|l") if index > 0 else Btn("·", callback_data="mv|home"))
-        rows.append(row)
-    rows.append([Btn("⬅️ Back to accounts", callback_data="acc_list")])
     return _markup(rows)
 
 
@@ -242,13 +226,10 @@ def account_screen(account_id: str, labels: dict[str, str], back_to: str = "acc_
     if has_username:
         username_row.append(Btn("🗑 Remove username", callback_data=f"un|rm|{account_id}"))
     return _markup([
-        [
-            Btn("📲 Devices", callback_data=f"dv|list|{account_id}"),
-            Btn("💬 Message", callback_data=f"msg_acc|{account_id}"),
-        ],
         [Btn(labels["u"], callback_data=f"fw|set|{account_id}|u")],
         [Btn(labels["b"], callback_data=f"fw|set|{account_id}|b")],
         [Btn(labels["c"], callback_data=f"fw|set|{account_id}|c")],
+        [Btn("💬 Message from this account", callback_data=f"msg_acc|{account_id}")],
         [
             Btn("✏️ Name", callback_data=f"pf|name|{account_id}"),
             Btn("🖼 Photo", callback_data=f"pf|photo|{account_id}"),
@@ -256,36 +237,11 @@ def account_screen(account_id: str, labels: dict[str, str], back_to: str = "acc_
         ],
         username_row,
         [
-            Btn("⬆️ Move up", callback_data=f"mv|up|{account_id}|a"),
-            Btn("⬇️ Move down", callback_data=f"mv|down|{account_id}|a"),
-        ],
-        [
             Btn("📤 Export session", callback_data=f"exp|ask|{account_id}"),
             Btn("🎁 Give account", callback_data=f"give|acc|{account_id}"),
         ],
         [Btn("🚪 Logout this account", callback_data=f"lo|{account_id}")],
         [Btn("⬅️ Back", callback_data=back_to)],
-    ])
-
-
-def devices_list(account_id: str, devices: list[dict]) -> Markup:
-    """One ❌ End button per device (never for the login this bot uses), then end-all and refresh."""
-    rows = []
-    for number, device in enumerate(devices, start=1):
-        if not device["current"]:
-            rows.append([Btn(f"❌ End {number} · {device['device'][:24]}", callback_data=f"dv|end|{account_id}|{device['hash']}")])
-    others = sum(1 for device in devices if not device["current"])
-    if others > 1:
-        rows.append([Btn(f"🧹 End all other devices ({others})", callback_data=f"dv|all|{account_id}")])
-    rows.append([Btn("🔄 Refresh", callback_data=f"dv|list|{account_id}")])
-    rows.append([Btn("⬅️ Back to account", callback_data=f"acc|{account_id}")])
-    return _markup(rows)
-
-
-def devices_end_all_confirm(account_id: str) -> Markup:
-    return _markup([
-        [Btn("✅ Yes, end all other devices", callback_data=f"dv|allc|{account_id}")],
-        [Btn("⬅️ Back", callback_data=f"dv|list|{account_id}")],
     ])
 
 
@@ -364,6 +320,10 @@ def admins_home(can_remove: bool) -> Markup:
 
 def after_action(again_label: str, again_data: str) -> Markup:
     return _markup([[Btn(again_label, callback_data=again_data), Btn("⚙️ Menu", callback_data="menu")]])
+
+
+def confirm_pair(yes_data: str, no_data: str, yes_label: str = "✅ Confirm") -> Markup:
+    return _markup([[Btn(yes_label, callback_data=yes_data, style="success"), Btn("❌ Cancel", callback_data=no_data, style="danger")]])
 
 
 def stop_bulk() -> Markup:
