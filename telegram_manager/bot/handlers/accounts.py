@@ -9,8 +9,6 @@ from telegram_manager.errors import describe_error
 
 
 class AccountHandlers(HandlerBase):
-    forwarding = None  # the ForwardingHandlers (owns the one-account screen); set in registry.wire()
-
     # --- connect --------------------------------------------------------------------------
     async def connect_menu(self, update, context) -> None:
         if not await self.entry(update):
@@ -21,7 +19,11 @@ class AccountHandlers(HandlerBase):
         if not await self.entry(update):
             return
         method = self.arg(update)
-        await self.engine.start(update, context, "cx_session" if method == "session" else "cx_otp")
+        answers: dict = {}
+        saved = await self.manager.saved_api(self.uid(update))  # /setapi: do not ask for it again
+        if saved:
+            answers["api_id"], answers["api_hash"] = saved
+        await self.engine.start(update, context, "cx_session" if method == "session" else "cx_otp", answers)
 
     # --- profile ---------------------------------------------------------------------------
     async def profile_button(self, update, context) -> None:
@@ -71,61 +73,13 @@ class AccountHandlers(HandlerBase):
         except Exception as exc:
             await ui.show(update, f"❌ Could not refresh: {describe_error(exc)}", keyboards.back("acc_list"))
             return
-        try:
-            renumbered = await self.manager.renumber_accounts(self.uid(update))
-        except Exception as exc:  # the names are already saved; only the numbering failed
-            renumbered = False
-            failed_numbers = describe_error(exc)
-        else:
-            failed_numbers = ""
         stamp = datetime.now(self.manager.tz).strftime("%H:%M:%S")
         notes = [f"🔄 Refreshed at {stamp}: {changed} name(s) changed."]
-        if renumbered:
-            notes.append("🔢 Numbers tidied up: your accounts are now 1, 2, 3 … in the same order.")
-        if failed_numbers:
-            notes.append(f"⚠️ Could not tidy the numbers: {failed_numbers}")
         if offline:
             notes.append(f"🔴 {offline} account(s) offline, so their names were not read.")
         if failed:
             notes.append(f"⚠️ {failed} account(s) did not answer.")
         await self.list_screen(update, context, "\n".join(notes))
-
-    # --- arrange: mv|home, mv|<up|down|top>|<id>|<a|l> --------------------------------------------
-    async def arrange_screen(self, update, footer: str = "") -> None:
-        accounts = await self.store.accounts.list(self.uid(update))
-        if not accounts:
-            await ui.show(update, "You have no connected accounts yet.", keyboards.no_accounts())
-            return
-        lines = ["↕️ Arrange your accounts", ""]
-        for account in accounts:
-            lines.append(f"{account.get('number')}. {self.manager.label_for_account(account)}")
-        lines += ["", "⬆️ ⬇️ move one place · 🔝 make it number 1. Tap a name to open the account."]
-        if footer:
-            lines += ["", footer]
-        await ui.show(update, "\n".join(lines), keyboards.arrange_list(accounts))
-
-    async def move_button(self, update, context) -> None:
-        if not await self.entry(update):
-            return
-        parts = (update.callback_query.data or "").split("|")
-        if parts == ["mv", "home"]:
-            await self.arrange_screen(update)
-            return
-        if len(parts) != 4 or parts[1] not in ("up", "down", "top") or parts[3] not in ("a", "l"):
-            return
-        account = await self.own_account(update, parts[2])
-        if account is None:
-            return
-        try:
-            moved = await self.manager.move_account(self.uid(update), str(account["id"]), parts[1])
-        except Exception as exc:
-            await ui.show(update, f"❌ Could not move it: {describe_error(exc)}", keyboards.back("mv|home"))
-            return
-        if parts[3] == "l":
-            await self.arrange_screen(update)
-            return
-        refreshed = await self.store.accounts.get(str(account["id"]), owner_id=self.uid(update))
-        await self.forwarding._screen(update, refreshed or account, "" if moved else "ℹ️ It cannot move any further that way.")
 
     async def list_accounts(self, update, context) -> None:
         if await self.entry(update):
