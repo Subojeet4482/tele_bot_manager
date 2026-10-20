@@ -6,7 +6,7 @@
 
 [**Open the bot → @telethon_manager_bot**](https://t.me/telethon_manager_bot)
 
-`Python 3.11+` · `Telethon` · `python-telegram-bot` · `Firebase Firestore` · `338 tests passing`
+`Python 3.11+` · `Telethon` · `python-telegram-bot` · `Firebase Firestore` · `339 tests passing`
 
 </div>
 
