@@ -27,13 +27,19 @@ from telegram_manager.constants import (
     TIME_PRESETS,
 )
 from telegram_manager.core.models import DailyJob
-from telegram_manager.parsing import format_clock, parse_count, parse_drift, parse_time
+from telegram_manager.parsing import format_clock, parse_count, parse_shift_range, parse_time
 
 _DELAY_INTRO = (
     f"⏱ Delay between accounts ({OPEN_CHAT_MIN_DELAY}–{BULK_DELAY_MAX} sec)\n\n"
     f"The broadcast opens chats, so accounts go one after another, at least {OPEN_CHAT_MIN_DELAY} seconds apart.\n\n"
     "Tap a value or type a number."
 )
+
+
+def _shift_text(low: int, high: int) -> str:
+    if high > low:
+        return f"Random +{low}-{high} sec later every day"
+    return f"+{low} sec later every day" if low else "Same time every day"
 
 
 def _shift(value, seconds: int):
@@ -65,7 +71,7 @@ def build_schedule_spec(deps) -> WizardSpec:
         return (
             "⏩ Should the time move later every day?\n\n"
             "Tap \"Same time\" to send at the same time every day, or choose / type how many seconds "
-            f"to add each day (1–{DRIFT_MAX}).\n\n"
+            f"to add each day (1–{DRIFT_MAX}), or a random range like 10-60 (a new random value each day).\n\n"
             f"Example: first run {format_clock(wc.answers['time'])} with 30 sec →\n"
             f"Day 1: {format_clock(wc.answers['time'])}\n"
             f"Day 2: {format_clock(_shift(wc.answers['time'], 30))}\n"
@@ -76,7 +82,9 @@ def build_schedule_spec(deps) -> WizardSpec:
         return [Choice("🔁 Same time daily" if n == 0 else f"+{n} sec", str(n)) for n in DRIFT_PRESETS]
 
     async def parse_shift(wc: WizardContext, raw: str) -> int:
-        return parse_drift(raw)
+        low, high = parse_shift_range(raw)
+        wc.answers["drift_max"] = high  # high > low means: a random shift between the two, every day
+        return low
 
     async def count_choices(wc: WizardContext) -> list[Choice]:
         return [Choice(f"{n}×", str(n)) for n in COUNT_PRESETS]
@@ -98,7 +106,7 @@ def build_schedule_spec(deps) -> WizardSpec:
             f"👥 From: {who}\n"
             f"⏱ {a['delay']} sec between accounts\n"
             f"🕐 First run: {format_clock(a['time'])} ({tz})\n"
-            f"⏩ {'+' + str(a['drift']) + ' sec later every day' if a['drift'] else 'Same time every day'}\n"
+            f"⏩ {_shift_text(a['drift'], a.get('drift_max', 0))}\n"
             f"🔁 Runs per day: {a['count']}"
         )
 
@@ -113,6 +121,7 @@ def build_schedule_spec(deps) -> WizardSpec:
         job = DailyJob(
             a["target"], a["text"], a["delay"], a["time"], a["count"],
             account_ids=picked, buttons=list(a.get("buttons") or []), drift_seconds=a.get("drift", 0),
+            drift_max_seconds=a.get("drift_max", 0),
         )
         try:
             slot = await manager.start_daily_job(wc.user_id, job, a.get("slot"))
