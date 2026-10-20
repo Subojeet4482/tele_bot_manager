@@ -296,6 +296,14 @@ class ImportTests(unittest.IsolatedAsyncioTestCase):
         await self.h.send_txt(OWNER, f"777:{API_HASH}:{SESSION_A}")
         self.assertEqual(self.connected[0][1:3], (777, API_HASH))
 
+    async def test_other_file_types_are_ignored(self):
+        from tests.fakes import FakeUpdate
+
+        update = FakeUpdate(OWNER, text=None)
+        update.effective_message.document = SimpleNamespace(file_size=10, file_name="photo.pdf", mime_type="application/pdf")
+        await self.h._run(OWNER, update, self.h.parts.extras.txt_input)
+        self.assertEqual((update.effective_message.replies, self.connected), ([], []))
+
     async def test_a_stranger_cannot_import(self):
         update = await self.h.send_txt(STRANGER, SESSION_A)
         self.assertEqual(self.connected, [])
