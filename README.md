@@ -6,11 +6,43 @@
 
 [**Open the bot → @telethon_manager_bot**](https://t.me/telethon_manager_bot)
 
-`Python 3.11+` · `Telethon` · `python-telegram-bot` · `Firebase Firestore` · `207 tests passing`
+`Python 3.11+` · `Telethon` · `python-telegram-bot` · `Firebase Firestore` · `338 tests passing`
 
 </div>
 
 ---
+
+## 🤖 AI manager (Gemini)
+
+Talk to the bot in plain words and it uses the commands above as tools: "account Rahul se @user ko hello bhejo", "kisi ka message aaya? dekho", "roz 6:30 baje broadcast lagao, har din 10-60 sec late", "forwarding user wali on karo", "naya account jodo".
+
+Everything is set inside the bot, no redeploy: **/aisettings** (or 🤖 AI manager in the menu).
+
+| Setting | What it does |
+|---|---|
+| 🏷 AI ka naam | The AI's name (default Nova) |
+| 👤 Mujhe kya bulaye | How it addresses you (default **Mandal Sir**) |
+| ✏️ Prompt / 👁 Poora prompt / ♻️ Reset | See and change the full instructions. `{name}` and `{address}` are filled in automatically |
+| 🧠 Model | `gemini-flash-latest` (default), flash-lite presets, or type any model name |
+| 🧩 Mode | **Confirm**: sending, blocking, deleting and scheduling show ✅/❌ buttons first. **Auto**: does it at once |
+| 🔑 Keys | Add as many Gemini keys as you like (paste several lines). They are used in turns; a key that hits its limit rests for a minute; a rejected key is set aside. 🧪 tests every key. Stored encrypted; your message is deleted |
+
+Handy:
+- `/ai <text>` or just write normally. `/aiclear` wipes its memory ("usko" works from the last ~16 messages).
+- **Reply to a forwarded message and start with `ai `** (for example `ai isko kya bolu`): the AI reads that message first. Without `ai`, a reply still goes straight to that chat as before.
+- Tools: list accounts, read a chat, unread chats, find a chat, whois, send, block, delete chat, unsend, forwarding switches, daily broadcasts (create / list / delete with buttons), add account.
+- **Secrets never go to Gemini**: API hash, session strings and Gemini keys typed in chat are saved locally and replaced by placeholders. Message text the AI reads (read_chat / unread) does go to Google to be understood.
+- The AI only ever sees and uses the accounts of the admin who is talking to it.
+- Memory and pending approvals live in RAM: a restart clears them.
+
+### AI private chats (full control)
+Tell it: "Rahul se @user ko hello bolke chat karo, usse course ke baare mein batao, khud reply karo". After you approve, every private message that person sends to that account is answered by the AI, using your prompt plus the goal you gave.
+- **Draft** (default): each reply comes to you with ✅ Bhejo / ⏭ Skip. **Auto**: it replies by itself after a short typing pause.
+- You are told about every exchange. **/aichats** lists the running chats with a ⛔ button each; "us se chat band karo" works too.
+- It stops by itself when the person says *stop / band karo / mat bhejo*, when the reply limit (default 15, max 200) is used up, or when the goal is done. If the person is rude or the AI cannot answer, it **pauses and asks you** ("usko ye bhejo: …", then "chat jaari rakho").
+- Built-in rules: it never asks for OTP, passwords, cards or money, does not invent facts, and says it is an AI if asked.
+- Chats are saved, so they continue after a restart.
+- More tools: join a group/channel, send after N minutes, press bot buttons, change name/bio, log an account out (always asks, even in auto mode). "Every 6 hours" = a daily broadcast with 4 times a day.
 
 ## Contents
 
@@ -28,9 +60,7 @@
 - **Account profile.** Change an account's name, bio and profile photo from the bot.
 - **Daily broadcast.** Schedule a message to go out at set times from **all accounts or only the ones you tick** (multi broadcast).
 - **Auto-click buttons.** `/all @bot hello [follow] (join)` presses the bot's inline buttons by name, and joins the channel behind a link button.
-- **Refresh.** 🔄 Refresh on the accounts list re-reads every account's name from Telegram and tidies the numbers (5, 6, 7, 8 → 1, 2, 3, 4); accounts are always shown in number order.
-- **Arrange order.** ↕️ Arrange order (or ⬆️ ⬇️ on an account's screen) moves an account up, down or to number 1.
-- **Devices.** 📲 Devices on an account's screen lists every login of that account (device, app, country, last active) and lets you end one device or all other devices. The login the bot itself uses is kept.
+- **Refresh.** 🔄 Refresh on the accounts list re-reads every account's name from Telegram; accounts are always shown in number order.
 - **Multi-admin.** The owner adds admins; every admin sees and controls only their own accounts.
 - **Give accounts away.** The owner gives chosen (or all) accounts to an admin; an admin gives accounts to the owner. Open `🎁 Give accounts`, or the button on an account's screen.
 - **Full account control.** Tap an account: see its number, add / change / remove its @username, change name, photo and bio, export its session, give it away or log it out.
@@ -90,6 +120,12 @@ Set `OWNER_ID` to your numeric Telegram ID (ask [@userinfobot](https://t.me/user
 | `/startscreen` | Set the start **photo, GIF or video** and welcome text, switch public export on/off |
 | `/keyboard` `/hidekeyboard` | Show / hide the quick menu under the chat |
 | `/emojiid` | Send a message with custom emoji and get their IDs (for `BUTTON_ICONS`) |
+| `/setapi` | Save your API ID + hash once (encrypted). Connect and `/import` then never ask for them. `/setapi clear` forgets them |
+| `/import` | Send a **.txt of session strings** (one per line, `#` lines ignored; `api_id:api_hash:session` also works). Every valid session is added. Any .txt you send is read the same way |
+| `/send` | Message from the accounts you name: `/send 1,2,5 @user hi`, `/send 1-5 @user hi 5sec Y`, `/send all @user hi`. Opens the chat if needed (works for people you never wrote to) |
+| `/unsend` | Delete (for everybody) what the bot sent in the last N minutes: `/unsend 30`, `/unsend 2h 1,2,5`. Asks first. Remembers up to 24 h, and is cleared when the bot restarts |
+| `/delchat` | Delete a chat on chosen accounts (your side only): `/delchat 1,2 @user`. Asks first |
+| `/whois` | Id, name and type of a `@username` |
 | `/help` | Every command as a button |
 | `/message` | Send from one account (pick account → chat → text). `/message 1 @user hi [follow] (join)` also presses inline buttons |
 | `/usermessage` `/botmessage` `/channelmessage` | Forwarding switch for one account (opens a screen with buttons) |
@@ -201,7 +237,7 @@ When it ends, the same message turns into the result (with the reason for every 
 
 *Menu → Daily broadcast* (or `/broadcast`) asks: user → message → buttons to click (optional) → **which accounts** (tick them, or Select all) → delay → first time → **daily shift** → runs per day. Ticking every account means "all accounts", so accounts you connect later are included automatically.
 
-**Daily shift (new).** After the first time the bot asks whether the time should move later every day. *Same time daily* keeps it fixed; or tap/type 1–9999999999999 seconds to add each day. The first time may include seconds (`6:42:30pm`). With a 30 sec shift and a first run at 6:42:30 PM you get 6:42:30 PM → 6:43 PM → 6:43:30 PM → … The time wraps inside the day, so the broadcast still goes out once a day (× runs per day).
+**Daily shift.** Besides a fixed number, you can type a random range like `10-60`: every day the time moves later by a new random amount in that range (the same days always give the same times, even after a restart).\n\n**Daily shift (fixed).** After the first time the bot asks whether the time should move later every day. *Same time daily* keeps it fixed; or tap/type 1–9999999999999 seconds to add each day. The first time may include seconds (`6:42:30pm`). With a 30 sec shift and a first run at 6:42:30 PM you get 6:42:30 PM → 6:43 PM → 6:43:30 PM → … The time wraps inside the day, so the broadcast still goes out once a day (× runs per day).
 
 ### Timed messages
 
@@ -243,7 +279,7 @@ A trailing `Y`/`N` and a trailing `3sec` are read as options, so a message that 
 | `FIREBASE_CREDENTIALS_B64` | ✅ | Firebase service-account JSON as one base64 line |
 | `SESSION_ENCRYPTION_KEY` | ✅ | Fernet key: exactly 44 characters, ends with `=`, **value only** (no `NAME=`, quotes or spaces) |
 | `FIREBASE_DATABASE_ID` | | Firestore database name (blank = default) |
-| `TIMEZONE` | | IANA name for the daily broadcast, default `UTC` (e.g. `Asia/Kolkata`) |
+| `TIMEZONE` | | IANA name for the daily broadcast, default `Asia/Kolkata` (India time; e.g. `UTC`, `America/New_York`) |
 | `LOG_LEVEL` | | Default `INFO` |
 | `PORT` | | Default `8080` (Render sets it) |
 | `SELF_PING_URL`, `SELF_PING_INTERVAL` | | Keep-awake ping. Interval `0` = off, otherwise at least 30 (default 600) |
