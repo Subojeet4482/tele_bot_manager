@@ -59,6 +59,8 @@ class ManagerBase:
         # account_id -> reason: sessions that can never work again; the watchdog stops retrying them.
         self._dead_accounts: dict[str, str] = {}
         self._offline_notified: set[str] = set()
+        # owner id -> [{"account_id", "target", "msg_id", "at"}]: what the bot sent, so /unsend can take it back.
+        self._sent_log: dict[int, list[dict[str, Any]]] = {}
 
     # --- telethon client helpers ---------------------------------------------------
     def _new_client(self, session_string: str, api_id: int, api_hash: str) -> TelegramClient:
