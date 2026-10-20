@@ -39,7 +39,10 @@ class SchedulerMixin:
     def _describe_job(self, job: DailyJob) -> str:
         accounts = "all accounts" if job.account_ids is None else f"{len(job.account_ids)} chosen account(s)"
         buttons = f"Buttons to click: {' → '.join(job.buttons)}\n" if job.buttons else ""
-        drift = f"+{job.drift_seconds} sec later every day" if job.drift_seconds else "same time every day"
+        if job.drift_max_seconds > job.drift_seconds:
+            drift = f"random +{job.drift_seconds}-{job.drift_max_seconds} sec later every day"
+        else:
+            drift = f"+{job.drift_seconds} sec later every day" if job.drift_seconds else "same time every day"
         return (
             f"Target: {job.target}\n"
             f"Message: {job.text}\n"
@@ -78,7 +81,9 @@ class SchedulerMixin:
         job.delay_seconds = max(OPEN_CHAT_MIN_DELAY, min(int(job.delay_seconds), BULK_DELAY_MAX))
         job.times_per_day = max(1, min(int(job.times_per_day), MAX_TIMES_PER_DAY))
         job.drift_seconds = max(0, min(int(job.drift_seconds), DRIFT_MAX))
-        job.anchor_date = self._anchor_for(job) if job.drift_seconds else None  # day 0 = the first real run
+        job.drift_max_seconds = max(job.drift_seconds, min(int(job.drift_max_seconds or 0), DRIFT_MAX))
+        shifting = bool(job.drift_seconds or job.drift_max_seconds)
+        job.anchor_date = self._anchor_for(job) if shifting else None  # day 0 = the first real run
         # Save first: if Firestore fails, the job that is already running is left alone.
         await self.store.jobs.save(owner_id, job.to_dict(), slot)
         self._run_daily_job(owner_id, slot, job)
@@ -115,7 +120,7 @@ class SchedulerMixin:
         for owner_id, slot, data in rows:
             try:
                 job = DailyJob.from_dict(data)
-                if job.drift_seconds and not job.anchor_date:
+                if (job.drift_seconds or job.drift_max_seconds) and not job.anchor_date:
                     job.anchor_date = datetime.now(self.tz).date().isoformat()
                 self._run_daily_job(owner_id, slot, job)
                 logger.info("Restored a daily job from Firestore")
@@ -154,10 +159,10 @@ class SchedulerMixin:
         for day_offset in (-1, 0, 1):
             day = now.date() + timedelta(days=day_offset)
             days_since = max(0, (day - anchor).days) if anchor else 0
-            start = base + days_since * job.drift_seconds
+            start = base + job.shift_total(days_since)
             midnight = datetime.combine(day, dtime(0, 0), tzinfo=self.tz)
             for slot in range(job.times_per_day):
-                offset = (start + slot * step) % 86400 if (job.drift_seconds or anchor) else base + slot * step
+                offset = (start + slot * step) % 86400 if (job.drift_seconds or job.drift_max_seconds or anchor) else base + slot * step
                 candidates.append(midnight + timedelta(seconds=offset))
         return min(c for c in candidates if c.timestamp() > now.timestamp())
 
