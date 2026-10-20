@@ -266,6 +266,10 @@ class ExtraHandlers(HandlerBase):
         document = getattr(message, "document", None)
         if document is None:
             return
+        name = (getattr(document, "file_name", "") or "").lower()
+        mime = (getattr(document, "mime_type", "") or "").lower()
+        if not (name.endswith(".txt") or mime == "text/plain"):
+            return  # only text files are read as session lists
         if getattr(document, "file_size", 0) and document.file_size > MAX_SESSION_FILE_BYTES:
             await message.reply_text("❌ That file is too big. Send a .txt under 1 MB.")
             return
