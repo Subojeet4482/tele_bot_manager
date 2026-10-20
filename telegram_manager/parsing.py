@@ -208,3 +208,107 @@ def parse_bulk_args(kind: str, raw: str) -> BulkArgs:
     elif message:
         args.text = message
     return args
+
+
+# --- account selectors: "all", "1,2,5", "1-5", "1 2 3", "all except 3" ---------------------
+_SELECTOR = re.compile(r"^[\d,\-\s]+$")
+
+
+def looks_like_selector(token: str) -> bool:
+    """True for the first word of /send: all, 1, 1,2,5 or 1-5 (names are not accepted here: they may contain spaces)."""
+    value = (token or "").strip().lower()
+    return value == "all" or bool(value and _SELECTOR.match(value) and any(ch.isdigit() for ch in value))
+
+
+def parse_selector(token: str, available: list[int]) -> list[int]:
+    """Turn "1,2,5-7" or "all" into account numbers, keeping only numbers the admin really has.
+
+    Raises ValueError for a malformed selector or a number that does not exist, so a typo
+    never silently sends from the wrong accounts."""
+    value = (token or "").strip().lower()
+    have = sorted(set(available))
+    if value == "all":
+        if not have:
+            raise ValueError("You have no accounts.")
+        return have
+    if not looks_like_selector(value):
+        raise ValueError("Use all, or account numbers like 1,2,5 or 1-5.")
+    wanted: list[int] = []
+    for part in re.split(r"[,\s]+", value):
+        if not part:
+            continue
+        if "-" in part:
+            bits = part.split("-")
+            if len(bits) != 2 or not bits[0].isdigit() or not bits[1].isdigit():
+                raise ValueError(f"'{part}' is not a valid range. Example: 1-5")
+            low, high = int(bits[0]), int(bits[1])
+            if low > high or high - low > 500:
+                raise ValueError(f"'{part}' is not a valid range. Example: 1-5")
+            wanted.extend(range(low, high + 1))
+        elif part.isdigit():
+            wanted.append(int(part))
+        else:
+            raise ValueError(f"'{part}' is not an account number.")
+    missing = sorted({n for n in wanted if n not in have})
+    if missing:
+        raise ValueError("No account with number: " + ", ".join(str(n) for n in missing) + ". Use /list to see yours.")
+    seen: set[int] = set()
+    return [n for n in wanted if not (n in seen or seen.add(n))]
+
+
+# --- session file (.txt): one session per line --------------------------------------------
+@dataclass
+class SessionLine:
+    session: str
+    api_id: int | None = None
+    api_hash: str | None = None
+
+
+def parse_session_file(text: str, limit: int = 100) -> tuple[list[SessionLine], int]:
+    """Read a .txt full of sessions. Understood per line:
+        <session>
+        <api_id>:<api_hash>:<session>        (also separated by space, comma or |)
+    Lines starting with # (the export file's account labels) and blank lines are skipped.
+    Returns (sessions, number of lines that were neither comments nor sessions)."""
+    found: list[SessionLine] = []
+    seen: set[str] = set()
+    ignored = 0
+    for raw in (text or "").splitlines():
+        line = raw.strip().strip("\ufeff")
+        if not line or line.startswith("#"):
+            continue
+        parts = [p for p in re.split(r"[\s,|:;]+", line) if p]
+        api_id = api_hash = None
+        if len(parts) == 3 and parts[0].isdigit() and len(parts[1]) >= 20:
+            api_id, api_hash, session = int(parts[0]), parts[1], parts[2]
+        elif len(parts) == 1:
+            session = parts[0]
+        else:
+            ignored += 1
+            continue
+        if not looks_like_telethon_session(session):
+            ignored += 1
+            continue
+        if session in seen:
+            continue
+        seen.add(session)
+        found.append(SessionLine(session, api_id, api_hash))
+    if len(found) > limit:
+        raise ValueError(f"That file has {len(found)} sessions. Send at most {limit} at a time.")
+    return found, ignored
+
+
+# --- random daily shift: "30" (fixed) or "10-60" (random between, new value every day) -------
+def parse_shift_range(text: str, maximum: int = DRIFT_MAX) -> tuple[int, int]:
+    """"30" -> (30, 30); "10-60" or "10..60" -> (10, 60). Used for the daily shift of a broadcast."""
+    value = (text or "").strip().lower().replace("sec", "").replace("s", "").replace("..", "-").replace(" ", "")
+    match = re.fullmatch(r"(\d{1,13})(?:-(\d{1,13}))?", value)
+    if not match:
+        raise ValueError(f"Send a whole number of seconds like 30, or a random range like 10-60 (up to {maximum}).")
+    low = int(match.group(1))
+    high = int(match.group(2)) if match.group(2) else low
+    if low > high:
+        low, high = high, low
+    if high > maximum:
+        raise ValueError(f"The most is {maximum} seconds.")
+    return low, high
