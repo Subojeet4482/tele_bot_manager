@@ -30,10 +30,14 @@ from telegram_manager.bot.flows.profile import build_profile_specs
 from telegram_manager.bot.flows.schedule import build_schedule_spec
 from telegram_manager.bot.flows.startcfg import build_startcfg_specs
 from telegram_manager.bot.guard import Guard
+from telegram_manager.ai.conversation import Conversations
+from telegram_manager.ai.gemini import GeminiClient
 from telegram_manager.bot.handlers.accounts import AccountHandlers
+from telegram_manager.bot.handlers.ai import AIHandlers
 from telegram_manager.bot.handlers.admins import AdminHandlers
 from telegram_manager.bot.handlers.commands import CommandHandlers
 from telegram_manager.bot.handlers.control import ControlHandlers
+from telegram_manager.bot.handlers.extras import ExtraHandlers
 from telegram_manager.bot.handlers.forwarding import ForwardingHandlers
 from telegram_manager.bot.handlers.logs import LogsHandlers
 from telegram_manager.bot.handlers.schedule import ScheduleHandlers
@@ -71,6 +75,8 @@ class Components:
     schedule: ScheduleHandlers
     admins: AdminHandlers
     control: ControlHandlers
+    extras: ExtraHandlers
+    ai: AIHandlers
     logs: LogsHandlers
     text: TextHandlers
     middleware: Middleware
@@ -92,6 +98,9 @@ def wire(deps: Deps) -> Components:
         *build_export_specs(deps),
         *build_startcfg_specs(deps),
     )
+    if deps.chats is None:  # the AI's private chats listen to every account's incoming messages
+        deps.chats = Conversations(deps)
+        deps.manager.incoming_hook = deps.chats.on_incoming
     parts = Components(
         engine=engine,
         start=StartHandlers(deps, engine),
@@ -101,13 +110,15 @@ def wire(deps: Deps) -> Components:
         schedule=ScheduleHandlers(deps, engine),
         admins=AdminHandlers(deps, engine),
         control=ControlHandlers(deps, engine),
+        extras=ExtraHandlers(deps, engine),
+        ai=AIHandlers(deps, engine),
         logs=LogsHandlers(deps, engine),
         text=TextHandlers(deps, engine),
         middleware=Middleware(deps, engine),
         menu=None,
     )
-    parts.accounts.forwarding = parts.forwarding
     parts.menu = reply_menu.MenuButtons(deps, engine, parts)
+    parts.text.ai = parts.ai  # plain messages go to the AI
     # Where Back / Cancel lead from inside a flow.
     engine.screens = {
         "home": parts.start.home_screen,
@@ -116,6 +127,7 @@ def wire(deps: Deps) -> Components:
         "acc_list": parts.accounts.list_screen,
         "sched|home": parts.schedule.home_screen,
         "sc|home": parts.control.startcfg_screen,
+        "ai|home": lambda update, context=None: parts.ai.show_settings(update),
     }
     return parts
 
@@ -153,6 +165,7 @@ def build_application(settings, log_buffer=None, log_access=None, health=None) -
         log_buffer=log_buffer,
         log_access=log_access,
         health=health,
+        gemini=GeminiClient(),
     )
     parts = wire(deps)
     application.bot_data.update(
@@ -164,7 +177,7 @@ def build_application(settings, log_buffer=None, log_access=None, health=None) -
     application.add_error_handler(parts.middleware.on_error)
     start, accounts, forwarding = parts.start, parts.accounts, parts.forwarding
     commands, schedule, admins, logs, text = parts.commands, parts.schedule, parts.admins, parts.logs, parts.text
-    control = parts.control
+    control, extras, ai = parts.control, parts.extras, parts.ai
     engine = parts.engine
 
     for name, callback in (
@@ -194,6 +207,16 @@ def build_application(settings, log_buffer=None, log_access=None, health=None) -
         ("hidekeyboard", start.hide_keyboard),
         ("emojiid", start.emoji_id),
         ("logs", logs.logs),
+        ("setapi", extras.setapi),
+        ("send", extras.send_command),
+        ("unsend", extras.unsend),
+        ("delchat", extras.delchat),
+        ("whois", extras.whois),
+        ("import", extras.import_command),
+        ("ai", ai.ai_command),
+        ("aisettings", ai.settings_command),
+        ("aiclear", ai.clear_command),
+        ("aichats", ai.chats_command),
     ):
         application.add_handler(CommandHandler(name, callback))
 
@@ -209,8 +232,6 @@ def build_application(settings, log_buffer=None, log_access=None, health=None) -
         (r"^loc\|", accounts.logout_confirm),
         (r"^acc\|", forwarding.account_screen),
         (r"^pf\|", accounts.profile_button),
-        (r"^mv\|", accounts.move_button),
-        (r"^dv\|", control.device_button),
         (r"^fw\|home$", forwarding.home),
         (r"^fw\|g\|", forwarding.toggle_global),
         (r"^fw\|accs$", forwarding.account_picker),
@@ -238,6 +259,12 @@ def build_application(settings, log_buffer=None, log_access=None, health=None) -
         (r"^sc\|preview$", start.preview),
         (r"^sc\|", control.startcfg_button),
         (r"^ex\|start$", control.public_export),
+        (r"^ai\|", ai.settings_button),
+        (r"^aia\|", ai.approval_button),
+        (r"^aib\|", ai.broadcast_button),
+        (r"^aic\|", ai.chat_button),
+        (r"^unsend\|", extras.unsend_button),
+        (r"^delchat\|", extras.delchat_button),
         (r"^wz\|", engine.on_callback),
     ):
         application.add_handler(CallbackQueryHandler(callback, pattern=pattern))
@@ -247,6 +274,7 @@ def build_application(settings, log_buffer=None, log_access=None, health=None) -
     application.add_handler(MessageHandler(filters.TEXT & filters.Entity("custom_emoji"), text.custom_emoji_input))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text.text_input))
     application.add_handler(MessageHandler(filters.PHOTO | filters.Document.IMAGE, text.photo_input))
+    application.add_handler(MessageHandler(filters.Document.FILE_EXTENSION("txt"), extras.txt_input))
     application.add_handler(MessageHandler(filters.ANIMATION | filters.VIDEO, text.media_input))
     application.add_handler(MessageReactionHandler(text.on_reaction))
     return application
