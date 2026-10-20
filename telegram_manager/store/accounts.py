@@ -170,46 +170,6 @@ class AccountStore:
                 logger.warning("Could not save the account counter: %s", exc)
             return {**row, "owner_id": new_owner_id, "number": number}
 
-    async def reorder(self, owner_id: int, ordered_ids: list[str]) -> bool:
-        """Number this admin's accounts 1, 2, 3 ... in the given order (ids not named keep their
-        relative order at the end). Returns True if any number changed. The next new account
-        continues after the last one."""
-        async with self._create_lock:
-            rows = await self.list(owner_id)
-            by_id = {str(row["id"]): row for row in rows}
-            ordered = [by_id[i] for i in ordered_ids if i in by_id]
-            named = {str(row["id"]) for row in ordered}
-            ordered += [row for row in rows if str(row["id"]) not in named]
-            changed = False
-            for position, row in enumerate(ordered, start=1):
-                if row.get("number") != position:
-                    await self.update(str(row["id"]), {"number": position})
-                    changed = True
-            try:
-                await self._settings.set_counter(owner_id, len(ordered) + 1)
-            except Exception as exc:  # only a high-water mark
-                logger.warning("Could not save the account counter: %s", exc)
-            return changed
-
-    async def compact(self, owner_id: int) -> bool:
-        """Close the gaps: 5, 6, 7, 8 becomes 1, 2, 3, 4 (same order)."""
-        rows = await self.list(owner_id)
-        return await self.reorder(owner_id, [str(row["id"]) for row in rows])
-
-    async def move(self, owner_id: int, account_id: str, where: str) -> bool:
-        """where: "up" / "down" (one place) or "top". Returns False if it cannot move that way."""
-        rows = await self.list(owner_id)
-        ids = [str(row["id"]) for row in rows]
-        if account_id not in ids:
-            raise ValueError("Account not found")
-        index = ids.index(account_id)
-        target = {"up": index - 1, "down": index + 1, "top": 0}.get(where)
-        if target is None or not 0 <= target < len(ids) or target == index:
-            return False
-        ids.insert(target, ids.pop(index))
-        await self.reorder(owner_id, ids)
-        return True
-
     async def delete(self, account_id: str) -> None:
         self._touch()
         try:
