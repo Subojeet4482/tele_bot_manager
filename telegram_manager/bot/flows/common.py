@@ -6,7 +6,14 @@ from typing import Awaitable, Callable
 
 from telegram_manager.bot.wizard.spec import Choice, Step, WizardAbort, WizardContext
 from telegram_manager.constants import BULK_DELAY_MAX, WHEN_PRESETS
-from telegram_manager.parsing import parse_button_names, parse_delay, parse_minutes, parse_target
+from telegram_manager.parsing import (
+    looks_like_selector,
+    parse_button_names,
+    parse_delay,
+    parse_minutes,
+    parse_selector,
+    parse_target,
+)
 
 
 def static(text: str) -> Callable[[WizardContext], Awaitable[str]]:
@@ -140,6 +147,9 @@ def accounts_step(deps, intro: str | None = None) -> Step:
         by_number = {str(a.get("number")): str(a["id"]) for a in rows}
         if raw.strip().lower() == "all":
             chosen = [str(a["id"]) for a in rows]
+        elif "-" in raw and looks_like_selector(raw):  # 1-5, 1,3,7-9
+            numbers = parse_selector(raw, [a.get("number") for a in rows if a.get("number")])
+            chosen = [by_number[str(n)] for n in numbers]
         else:
             chosen = []
             for token in filter(None, re.split(r"[,\s]+", raw.strip())):
