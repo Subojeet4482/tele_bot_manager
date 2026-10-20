@@ -61,6 +61,47 @@ class SettingsStore:
             raise ValueError(f"Unknown forwarding setting: {name}")
         await self._write(owner_id, {name: bool(value)})
 
+    async def get_api_creds(self, owner_id: int) -> dict | None:
+        """{"api_id": int, "api_hash_enc": str} saved with /setapi, or None."""
+        data = await self._data(owner_id)
+        if data.get("api_id") and data.get("api_hash_enc"):
+            return {"api_id": int(data["api_id"]), "api_hash_enc": str(data["api_hash_enc"])}
+        return None
+
+    async def set_api_creds(self, owner_id: int, api_id: int | None, api_hash_enc: str | None) -> None:
+        await self._write(owner_id, {"api_id": api_id, "api_hash_enc": api_hash_enc})
+
+    # --- AI assistant (/ai): name, prompt, model, mode and the Gemini keys (encrypted) -----------
+    AI_FIELDS = ("ai_name", "ai_prompt", "ai_model", "ai_mode", "ai_enabled", "ai_keys_enc")
+
+    async def get_ai(self, owner_id: int) -> dict:
+        data = await self._data(owner_id)
+        return {key: data.get(key) for key in self.AI_FIELDS}
+
+    async def set_ai(self, owner_id: int, **values) -> None:
+        unknown = set(values) - set(self.AI_FIELDS)
+        if unknown:
+            raise ValueError(f"Unknown AI setting: {', '.join(sorted(unknown))}")
+        await self._write(owner_id, values)
+
+    async def get_ai(self, owner_id: int) -> dict:
+        """The admin's AI settings (name, prompt, model, mode, encrypted keys). Missing fields = defaults."""
+        value = (await self._data(owner_id)).get("ai")
+        return dict(value) if isinstance(value, dict) else {}
+
+    async def set_ai(self, owner_id: int, **values) -> None:
+        current = await self.get_ai(owner_id)
+        current.update(values)
+        await self._write(owner_id, {"ai": current})
+
+    async def get_ai_chats(self, owner_id: int) -> list[dict]:
+        """The AI's running private chats (see ai/conversation.py)."""
+        value = (await self._data(owner_id)).get("ai_chats")
+        return [dict(item) for item in value] if isinstance(value, list) else []
+
+    async def set_ai_chats(self, owner_id: int, chats: list[dict]) -> None:
+        await self._write(owner_id, {"ai_chats": chats})
+
     async def get_counter(self, owner_id: int) -> int:
         try:
             return max(1, int((await self._data(owner_id)).get("next_account_number", 1)))
