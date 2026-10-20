@@ -31,10 +31,12 @@ class Middleware:
             data = query.data or ""
             logger.info("Button tap | user=%s admin=%s action=%s", mask_id(uid), admin, data.split("|", 1)[0])
             if not data.startswith("wz|"):
+                context.user_data.pop("ai_wait", None)  # a button cancels a pending settings answer
                 await self.engine.reset(context)  # also closes a stranger's half-finished export login
         elif message is not None and (message.text or "").startswith("/"):
             command = message.text.split(maxsplit=1)[0].split("@")[0]
             logger.info("Command | user=%s admin=%s cmd=%s", mask_id(uid), admin, command)
+            context.user_data.pop("ai_wait", None)
             await self.engine.reset(context)
         elif message is not None and reply_menu.lookup(message.text) is not None:
             logger.info("Menu button | user=%s admin=%s action=%s", mask_id(uid), admin, reply_menu.lookup(message.text).key)
