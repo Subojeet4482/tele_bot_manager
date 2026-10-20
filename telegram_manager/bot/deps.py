@@ -17,3 +17,5 @@ class Deps:
     log_buffer: Any = None
     log_access: Any = None
     health: Any = None
+    chats: Any = None  # telegram_manager.ai.conversation.Conversations
+    gemini: Any = None  # telegram_manager.ai.gemini.GeminiClient
