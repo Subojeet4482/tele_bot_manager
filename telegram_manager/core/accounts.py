@@ -43,23 +43,6 @@ class AccountsMixin:
         changed = sum(1 for result in results if result is True)
         return changed, failed, len(rows) - len(online)
 
-    async def _sync_numbers(self, owner_id: int) -> None:
-        for row in await self.store.accounts.list(owner_id):
-            if str(row["id"]) in self.accounts:
-                self.accounts[str(row["id"])]["number"] = row.get("number")
-
-    async def renumber_accounts(self, owner_id: int) -> bool:
-        """Close the gaps in this admin's numbers (5, 6, 7 -> 1, 2, 3). True if anything changed."""
-        changed = await self.store.accounts.compact(owner_id)
-        await self._sync_numbers(owner_id)
-        return changed
-
-    async def move_account(self, owner_id: int, account_id: str, where: str) -> bool:
-        """Move one account up / down / to the top of this admin's list."""
-        moved = await self.store.accounts.move(owner_id, account_id, where)
-        await self._sync_numbers(owner_id)
-        return moved
-
     async def set_forward_override(self, account_id: str, name: str, value: bool | None) -> None:
         """Per-account forwarding switch. None means "follow the admin's global setting"."""
         await self.store.accounts.update(account_id, {name: value})
